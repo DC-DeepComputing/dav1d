@@ -312,6 +312,8 @@ static int cdef_find_dir_c(const pixel *img, const ptrdiff_t stride,
 #include "src/x86/cdef.h"
 #elif ARCH_LOONGARCH64
 #include "src/loongarch/cdef.h"
+#elif ARCH_RISCV
+#include "src/riscv/cdef.h"
 #endif
 #endif
 
@@ -330,6 +332,8 @@ COLD void bitfn(dav1d_cdef_dsp_init)(Dav1dCdefDSPContext *const c) {
     cdef_dsp_init_x86(c);
 #elif ARCH_LOONGARCH64
     cdef_dsp_init_loongarch(c);
+#elif ARCH_RISCV
+    cdef_dsp_init_riscv(c);
 #endif
 #endif
 }

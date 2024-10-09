@@ -264,9 +264,13 @@ if is_asm_enabled
             'ppc/loopfilter_tmpl.c',
         )}
     elif host_machine.cpu_family().startswith('riscv')
+        arch_flags += {'riscv': ['-march=rv64gcv']}
         libdav1d_sources += files(
             'riscv/cpu.c',
         )
+        libdav1d_arch_tmpl_sources += {'riscv': files(
+            'riscv/cdef_tmpl.c',
+        )}
         if host_machine.cpu_family() == 'riscv64'
             libdav1d_sources += files(
                 'riscv/64/cpu.S',
