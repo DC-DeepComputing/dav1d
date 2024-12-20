@@ -1453,6 +1453,7 @@ cglobal lpf_v_sb_y_8bpc, 7, 10, 16, 32 * 11, \
     RET
 ALIGN function_align
 .v4:
+    _CET_ENDBR
     FILTER         4, v
     ret
 
@@ -1497,6 +1498,7 @@ cglobal lpf_h_sb_y_8bpc, 7, 10, 16, 32 * 21, \
     RET
 ALIGN function_align
 .h4:
+    _CET_ENDBR
     FILTER         4, h
     ret
 

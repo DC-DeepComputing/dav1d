@@ -241,6 +241,20 @@ DECLARE_REG_TMP_SIZE 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14
     %define gprsize 4
 %endif
 
+%ifdef IBT
+    %if IBT
+        %if ARCH_X86_64
+            %define _CET_ENDBR endbr64
+        %else
+            %define _CET_ENDBR
+        %endif
+    %else
+        %define _CET_ENDBR
+    %endif
+%else
+    %define _CET_ENDBR
+%endif
+
 %macro LEA 2
 %if ARCH_X86_64
     lea %1, [%2]
@@ -861,6 +875,7 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
     %endif
     align function_align
     %2:
+    _CET_ENDBR
     RESET_MM_PERMUTATION        ; needed for x86-64, also makes disassembly somewhat nicer
     %xdefine rstk rsp           ; copy of the original stack pointer, used when greater alignment than the known stack alignment is required
     %assign stack_offset 0      ; stack pointer offset relative to the return address
@@ -882,6 +897,7 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
         global current_function %+ %1
     %endif
     %1:
+    _CET_ENDBR
 %endmacro
 
 %macro cextern 1
@@ -926,7 +942,15 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
                 db "GNU",0     ; n_name
                 dd 0xc0000002  ; pr_type = GNU_PROPERTY_X86_FEATURE_1_AND
                 dd 0x00000004  ; pr_datasz
+%ifdef IBT
+    %if IBT
+                dd 0x00000003  ; pr_data = GNU_PROPERTY_X86_FEATURE_1_IBT | GNU_PROPERTY_X86_FEATURE_1_SHSTK
+    %else
                 dd 0x00000002  ; pr_data = GNU_PROPERTY_X86_FEATURE_1_SHSTK
+    %endif
+%else
+                dd 0x00000002  ; pr_data = GNU_PROPERTY_X86_FEATURE_1_SHSTK
+%endif
                 dd 0x00000000  ; pr_padding
             %endif
         %endif
