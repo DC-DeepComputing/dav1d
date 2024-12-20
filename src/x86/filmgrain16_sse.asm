@@ -185,6 +185,7 @@ cglobal generate_grain_y_16bpc, 3, 6, 8, buf, fg_data, bdmax
     jmp              r3
 
 .ar1:
+    _CET_ENDBR
 %if WIN64
     DEFINE_ARGS shift, fg_data, max, buf, val3, min, cf3, x, val0
     lea            bufq, [r0-2*(82*73-(82*3+79))]
@@ -271,9 +272,11 @@ cglobal generate_grain_y_16bpc, 3, 6, 8, buf, fg_data, bdmax
 %undef hd
 %endif
 .ar0:
+    _CET_ENDBR
     RET
 
 .ar2:
+    _CET_ENDBR
 %if ARCH_X86_32
     ALLOC_STACK -16*8
 %endif
@@ -418,6 +421,7 @@ cglobal generate_grain_y_16bpc, 3, 6, 8, buf, fg_data, bdmax
     RET
 
 .ar3:
+    _CET_ENDBR
     DEFINE_ARGS buf, fg_data, bdmax, shift
 %if WIN64
     mov              r6, rsp
@@ -709,6 +713,7 @@ cglobal generate_grain_uv_%1_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     jmp              r5
 
 .ar0:
+    _CET_ENDBR
 %if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
 %else
@@ -825,6 +830,7 @@ cglobal generate_grain_uv_%1_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     RET
 
 .ar1:
+    _CET_ENDBR
 %if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, max, cf3, min, val3, x
 %else
@@ -953,6 +959,7 @@ cglobal generate_grain_uv_%1_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     RET
 
 .ar2:
+    _CET_ENDBR
 %if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
 %else
@@ -1142,6 +1149,7 @@ cglobal generate_grain_uv_%1_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     RET
 
 .ar3:
+    _CET_ENDBR
 %if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
 %if WIN64
