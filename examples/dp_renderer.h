@@ -29,13 +29,13 @@
 
 #include "dav1d/dav1d.h"
 
-#include <SDL.h>
+#include "dp_compat.h"
 #if HAVE_PLACEBO
 # include <libplacebo/config.h>
 #endif
 
 // Check libplacebo Vulkan rendering
-#if HAVE_VULKAN && defined(SDL_VIDEO_VULKAN)
+#if HAVE_VULKAN
 # if defined(PL_HAVE_VULKAN) && PL_HAVE_VULKAN
 #  define HAVE_RENDERER_PLACEBO 1
 #  define HAVE_PLACEBO_VULKAN 1
@@ -133,17 +133,43 @@ static inline const Dav1dPlayRenderInfo *dp_get_renderer(const char *name)
     return NULL;
 }
 
-static inline SDL_Window *dp_create_sdl_window(int window_flags)
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+
+static inline SDL_Window *dp_create_sdl_window(int window_flags, int fullscreen)
 {
     SDL_Window *win;
-    window_flags |= SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI;
+
+    window_flags |= SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (fullscreen)
+        window_flags |= SDL_WINDOW_FULLSCREEN;
+
+    win = SDL_CreateWindow("Dav1dPlay", WINDOW_WIDTH, WINDOW_HEIGHT, window_flags);
+    if (!win)
+        return NULL;
+
+    SDL_HideCursor();
+
+    return win;
+}
+
+#else
+
+static inline SDL_Window *dp_create_sdl_window(int window_flags, int fullscreen)
+{
+    SDL_Window *win;
+
+    window_flags |= SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+    if (fullscreen)
+        window_flags |= SDL_WINDOW_FULLSCREEN;
 
     win = SDL_CreateWindow("Dav1dPlay", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WINDOW_WIDTH, WINDOW_HEIGHT, window_flags);
     if (!win)
         return NULL;
 
-    SDL_SetWindowResizable(win, SDL_TRUE);
+    SDL_ShowCursor(0);
 
     return win;
 }
+
+#endif

@@ -34,11 +34,14 @@
 
 #if HAVE_PLACEBO_VULKAN
 # include <libplacebo/vulkan.h>
-# include <SDL_vulkan.h>
+# if HAVE_SDL == 3
+#  include <SDL3/SDL_vulkan.h>
+# else
+#  include <SDL_vulkan.h>
+# endif
 #endif
 #if HAVE_PLACEBO_OPENGL
 # include <libplacebo/opengl.h>
-# include <SDL_opengl.h>
 #endif
 
 
@@ -72,7 +75,7 @@ typedef struct renderer_priv_ctx
     // Placebo swapchain
     pl_swapchain swapchain;
     // Lock protecting access to the texture
-    SDL_mutex *lock;
+    SDL_Mutex *lock;
     // Image to render, and planes backing them
     struct pl_frame image;
     pl_tex plane_tex[3];
@@ -81,17 +84,12 @@ typedef struct renderer_priv_ctx
 static Dav1dPlayRendererPrivateContext*
     placebo_renderer_create_common(const Dav1dPlaySettings *settings, int window_flags)
 {
-    if (settings->fullscreen)
-        window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-
     // Create Window
-    SDL_Window *sdlwin = dp_create_sdl_window(window_flags | SDL_WINDOW_RESIZABLE);
+    SDL_Window *sdlwin = dp_create_sdl_window(window_flags, settings->fullscreen);
     if (sdlwin == NULL) {
         fprintf(stderr, "Creating SDL window failed: %s\n", SDL_GetError());
         return NULL;
     }
-
-    SDL_ShowCursor(0);
 
     // Alloc
     Dav1dPlayRendererPrivateContext *const rd_priv_ctx =
@@ -130,6 +128,11 @@ static Dav1dPlayRendererPrivateContext*
 }
 
 #if HAVE_PLACEBO_OPENGL
+static void placebo_gl_swap_buffers(void *priv)
+{
+    SDL_GL_SwapWindow((SDL_Window *)priv);
+}
+
 static void *placebo_renderer_create_gl(const Dav1dPlaySettings *settings)
 {
     SDL_Window *sdlwin = NULL;
@@ -166,7 +169,7 @@ static void *placebo_renderer_create_gl(const Dav1dPlaySettings *settings)
 
     rd_priv_ctx->swapchain = pl_opengl_create_swapchain(rd_priv_ctx->gl,
         pl_opengl_swapchain_params(
-            .swap_buffers = (void (*)(void *)) SDL_GL_SwapWindow,
+            .swap_buffers = placebo_gl_swap_buffers,
             .priv = sdlwin,
         ));
 
@@ -176,7 +179,11 @@ static void *placebo_renderer_create_gl(const Dav1dPlaySettings *settings)
     }
 
     int w = WINDOW_WIDTH, h = WINDOW_HEIGHT;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    SDL_GetWindowSizeInPixels(sdlwin, &w, &h);
+#else
     SDL_GL_GetDrawableSize(sdlwin, &w, &h);
+#endif
 
     if (!pl_swapchain_resize(rd_priv_ctx->swapchain, &w, &h)) {
         fprintf(stderr, "Failed resizing vulkan swapchain!\n");
@@ -206,6 +213,14 @@ static void *placebo_renderer_create_vk(const Dav1dPlaySettings *settings)
     sdlwin = rd_priv_ctx->win;
 
     // Init Vulkan
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    Uint32 num;
+    const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&num);
+    if (!extensions) {
+        fprintf(stderr, "Failed getting Vk instance extensions: %s\n", SDL_GetError());
+        exit(1);
+    }
+#else
     unsigned num = 0;
     if (!SDL_Vulkan_GetInstanceExtensions(sdlwin, &num, NULL)) {
         fprintf(stderr, "Failed enumerating Vulkan extensions: %s\n", SDL_GetError());
@@ -220,6 +235,7 @@ static void *placebo_renderer_create_vk(const Dav1dPlaySettings *settings)
         fprintf(stderr, "Failed getting Vk instance extensions\n");
         exit(1);
     }
+#endif
 
     if (num > 0) {
         printf("Requesting %d additional Vulkan extensions:\n", num);
@@ -235,9 +251,16 @@ static void *placebo_renderer_create_vk(const Dav1dPlaySettings *settings)
         fprintf(stderr, "Failed creating Vulkan instance!\n");
         exit(1);
     }
+#if !SDL_VERSION_ATLEAST(3, 0, 0)
     free(extensions);
+#endif
 
-    if (!SDL_Vulkan_CreateSurface(sdlwin, rd_priv_ctx->vk_inst->instance, &rd_priv_ctx->surf)) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    if (!SDL_Vulkan_CreateSurface(sdlwin, rd_priv_ctx->vk_inst->instance, NULL, &rd_priv_ctx->surf))
+#else
+    if (!SDL_Vulkan_CreateSurface(sdlwin, rd_priv_ctx->vk_inst->instance, &rd_priv_ctx->surf))
+#endif
+    {
         fprintf(stderr, "Failed creating vulkan surface: %s\n", SDL_GetError());
         exit(1);
     }
@@ -292,15 +315,24 @@ static void placebo_renderer_destroy(void *cookie)
 #if HAVE_PLACEBO_VULKAN
     if (rd_priv_ctx->vk) {
         pl_vulkan_destroy(&(rd_priv_ctx->vk));
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        SDL_Vulkan_DestroySurface(rd_priv_ctx->vk_inst->instance, rd_priv_ctx->surf, NULL);
+#else
         vkDestroySurfaceKHR(rd_priv_ctx->vk_inst->instance, rd_priv_ctx->surf, NULL);
+#endif
         pl_vk_inst_destroy(&(rd_priv_ctx->vk_inst));
     }
 #endif
 #if HAVE_PLACEBO_OPENGL
     if (rd_priv_ctx->gl)
         pl_opengl_destroy(&(rd_priv_ctx->gl));
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    if (rd_priv_ctx->gl_context)
+        SDL_GL_DestroyContext(rd_priv_ctx->gl_context);
+#else
     if (rd_priv_ctx->gl_context)
         SDL_GL_DeleteContext(rd_priv_ctx->gl_context);
+#endif
 #endif
 
     SDL_DestroyWindow(rd_priv_ctx->win);

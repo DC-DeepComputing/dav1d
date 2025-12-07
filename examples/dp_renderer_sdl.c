@@ -25,8 +25,11 @@
  */
 
 #include "dp_renderer.h"
+#include "dp_compat.h"
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /**
  * Renderer context for SDL
@@ -38,23 +41,20 @@ typedef struct renderer_priv_ctx
     // SDL renderer
     SDL_Renderer *renderer;
     // Lock protecting access to the texture
-    SDL_mutex *lock;
+    SDL_Mutex *lock;
     // Texture to render
     SDL_Texture *tex;
+    // Texture dimensions
+    int tex_w, tex_h;
 } Dav1dPlayRendererPrivateContext;
 
 static void *sdl_renderer_create(const Dav1dPlaySettings *settings)
 {
-    int window_flags = 0;
-    if (settings->fullscreen)
-        window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-
-    SDL_Window *win = dp_create_sdl_window(window_flags);
+    SDL_Window *win = dp_create_sdl_window(0, settings->fullscreen);
     if (win == NULL) {
         fprintf(stderr, "Creating SDL window failed: %s\n", SDL_GetError());
         return NULL;
     }
-    SDL_ShowCursor(0);
 
     // Alloc
     Dav1dPlayRendererPrivateContext *rd_priv_ctx = malloc(sizeof(Dav1dPlayRendererPrivateContext));
@@ -64,10 +64,15 @@ static void *sdl_renderer_create(const Dav1dPlaySettings *settings)
     }
     rd_priv_ctx->win = win;
 
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    // Create renderer
+    rd_priv_ctx->renderer = SDL_CreateRenderer(win, NULL);
+#else
     // Create renderer
     rd_priv_ctx->renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
     // Set scale quality
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+#endif
 
     // Create Mutex
     rd_priv_ctx->lock = SDL_CreateMutex();
@@ -78,6 +83,8 @@ static void *sdl_renderer_create(const Dav1dPlaySettings *settings)
     }
 
     rd_priv_ctx->tex = NULL;
+    rd_priv_ctx->tex_w = 0;
+    rd_priv_ctx->tex_h = 0;
 
     return rd_priv_ctx;
 }
@@ -108,7 +115,11 @@ static void sdl_render(void *cookie, const Dav1dPlaySettings *settings)
 
     // Display the frame
     SDL_RenderClear(rd_priv_ctx->renderer);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    SDL_RenderTexture(rd_priv_ctx->renderer, rd_priv_ctx->tex, NULL, NULL);
+#else
     SDL_RenderCopy(rd_priv_ctx->renderer, rd_priv_ctx->tex, NULL, NULL);
+#endif
     SDL_RenderPresent(rd_priv_ctx->renderer);
 
     SDL_UnlockMutex(rd_priv_ctx->lock);
@@ -130,8 +141,6 @@ static int sdl_update_texture(void *cookie, Dav1dPicture *dav1d_pic,
 
     int width = dav1d_pic->p.w;
     int height = dav1d_pic->p.h;
-    int tex_w = width;
-    int tex_h = height;
 
     enum Dav1dPixelLayout dav1d_layout = dav1d_pic->p.layout;
 
@@ -142,8 +151,7 @@ static int sdl_update_texture(void *cookie, Dav1dPicture *dav1d_pic,
 
     SDL_Texture *texture = rd_priv_ctx->tex;
     if (texture != NULL) {
-        SDL_QueryTexture(texture, NULL, NULL, &tex_w, &tex_h);
-        if (tex_w != width || tex_h != height) {
+        if (rd_priv_ctx->tex_w != width || rd_priv_ctx->tex_h != height) {
             SDL_DestroyTexture(texture);
             texture = NULL;
         }
@@ -152,7 +160,11 @@ static int sdl_update_texture(void *cookie, Dav1dPicture *dav1d_pic,
     if (texture == NULL) {
         texture = SDL_CreateTexture(rd_priv_ctx->renderer, SDL_PIXELFORMAT_IYUV,
             SDL_TEXTUREACCESS_STREAMING, width, height);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        SDL_SetRenderLogicalPresentation(rd_priv_ctx->renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+#else
         SDL_RenderSetLogicalSize(rd_priv_ctx->renderer, width, height);
+#endif
     }
 
     SDL_UpdateYUVTexture(texture, NULL,
@@ -162,6 +174,8 @@ static int sdl_update_texture(void *cookie, Dav1dPicture *dav1d_pic,
         );
 
     rd_priv_ctx->tex = texture;
+    rd_priv_ctx->tex_w = width;
+    rd_priv_ctx->tex_h = height;
     SDL_UnlockMutex(rd_priv_ctx->lock);
     return 0;
 }

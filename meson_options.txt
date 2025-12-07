@@ -63,6 +63,11 @@ option('xxhash_muxer',
     type : 'feature',
     value : 'auto')
 
+option('sdl_version',
+    type: 'combo',
+    choices: ['auto', '2', '3'],
+    value: 'auto')
+
 option('trim_dsp',
     type: 'combo',
     choices: ['true', 'false', 'if-release'],

@@ -29,13 +29,14 @@
 
 #include <getopt.h>
 #include <stdbool.h>
-
-#include <SDL.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "dav1d/dav1d.h"
 
 #include "common/attributes.h"
 #include "tools/input/input.h"
+#include "dp_compat.h"
 #include "dp_fifo.h"
 #include "dp_renderer.h"
 
@@ -62,14 +63,14 @@ typedef struct render_context
     void *rd_priv;
 
     // Lock to protect access to the context structure
-    SDL_mutex *lock;
+    SDL_Mutex *lock;
 
     // Timestamp of last displayed frame (in timebase unit)
     int64_t last_ts;
     // Timestamp of last decoded frame (in timebase unit)
     int64_t current_ts;
     // Ticks when last frame was received
-    uint32_t last_ticks;
+    uint64_t last_ticks;
     // PTS time base
     double timebase;
     // Seconds per frame
@@ -80,17 +81,18 @@ typedef struct render_context
     // Fifo
     Dav1dPlayPtrFifo *fifo;
 
-    // Custom SDL2 event types
+    // Event handling
     uint32_t event_types;
+    int num_frame_events;
 
     // User pause state
     uint8_t user_paused;
     // Internal pause state
     uint8_t paused;
     // Start of internal pause state
-    uint32_t pause_start;
+    uint64_t pause_start;
     // Duration of internal pause state
-    uint32_t pause_time;
+    uint64_t pause_time;
 
     // Seek accumulator
     int seek;
@@ -250,8 +252,13 @@ static Dav1dPlayRenderContext *dp_rd_ctx_create(int argc, char **argv)
     memset(&rd_ctx->settings, 0, sizeof(rd_ctx->settings));
     dp_rd_ctx_parse_args(rd_ctx, argc, argv);
 
-    // Init SDL2 library
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
+    // Init SDL library
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+    if (!SDL_Init(SDL_INIT_VIDEO))
+#else
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)
+#endif
+    {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         goto fail;
     }
@@ -338,7 +345,7 @@ static void dp_rd_ctx_toggle_pause(Dav1dPlayRenderContext *rd_ctx)
     if (rd_ctx->seek)
         goto out;
     rd_ctx->paused = rd_ctx->user_paused;
-    uint32_t now = SDL_GetTicks();
+    uint64_t now = SDL_GetTicks();
     if (rd_ctx->paused)
         rd_ctx->pause_start = now;
     else {
@@ -443,7 +450,7 @@ static int dp_rd_ctx_handle_seek(Dav1dPlayRenderContext *rd_ctx,
 out:
     rd_ctx->paused = rd_ctx->user_paused;
     if (!rd_ctx->paused && rd_ctx->seek) {
-        uint32_t now = SDL_GetTicks();
+        uint64_t now = SDL_GetTicks();
         rd_ctx->pause_time += now - rd_ctx->pause_start;
         rd_ctx->pause_start = 0;
         rd_ctx->last_ticks = now;
@@ -486,13 +493,13 @@ static void dp_rd_ctx_render(Dav1dPlayRenderContext *rd_ctx)
 {
     SDL_LockMutex(rd_ctx->lock);
     // Calculate time since last frame was received
-    uint32_t ticks_now = SDL_GetTicks();
-    uint32_t ticks_diff = (rd_ctx->last_ticks != 0) ? ticks_now - rd_ctx->last_ticks : 0;
+    uint64_t ticks_now = SDL_GetTicks();
+    uint64_t ticks_diff = (rd_ctx->last_ticks != 0) ? ticks_now - rd_ctx->last_ticks : 0;
 
     // Calculate when to display the frame
     int64_t ts_diff = rd_ctx->current_ts - rd_ctx->last_ts;
-    int32_t pts_diff = (ts_diff * rd_ctx->timebase) * 1000.0 + .5;
-    int32_t wait_time = pts_diff - ticks_diff;
+    int64_t pts_diff = (ts_diff * rd_ctx->timebase) * 1000.0 + .5;
+    int64_t wait_time = pts_diff - ticks_diff;
 
     // In untimed mode, simply don't wait
     if (rd_ctx->settings.untimed)
@@ -502,7 +509,7 @@ static void dp_rd_ctx_render(Dav1dPlayRenderContext *rd_ctx)
     // that SDL_Delay will wait for exactly the requested amount of time so in a
     // accurate player this would need to be done in a better way.
     if (wait_time > 0) {
-        SDL_Delay(wait_time);
+        SDL_Delay((Uint32)wait_time);
     } else if (wait_time < -10 && !rd_ctx->paused) { // Do not warn for minor time drifts
         fprintf(stderr, "Frame displayed %f seconds too late\n", wait_time / 1000.0);
     }
@@ -513,6 +520,26 @@ static void dp_rd_ctx_render(Dav1dPlayRenderContext *rd_ctx)
     rd_ctx->last_ticks = SDL_GetTicks();
 
     SDL_UnlockMutex(rd_ctx->lock);
+}
+
+static int dp_rd_ctx_on_key_down(Dav1dPlayRenderContext *rd_ctx, const SDL_Keycode sym)
+{
+    if (sym == SDLK_SPACE) {
+        dp_rd_ctx_toggle_pause(rd_ctx);
+    } else if (sym == SDLK_ESCAPE) {
+        dp_rd_ctx_request_shutdown(rd_ctx);
+        dp_fifo_flush(rd_ctx->fifo, destroy_pic);
+        return 0;
+    } else if (sym == SDLK_LEFT || sym == SDLK_RIGHT) {
+        if (sym == SDLK_LEFT)
+            dp_rd_ctx_seek(rd_ctx, -5);
+        else if (sym == SDLK_RIGHT)
+            dp_rd_ctx_seek(rd_ctx, +5);
+        dp_fifo_flush(rd_ctx->fifo, destroy_pic);
+        SDL_FlushEvent(rd_ctx->event_types + DAV1D_EVENT_NEW_FRAME);
+        rd_ctx->num_frame_events = 0;
+    }
+    return 1;
 }
 
 static int decode_frame(Dav1dPicture **p, Dav1dContext *c,
@@ -708,8 +735,8 @@ int main(int argc, char **argv)
     // Main loop
 #define NUM_MAX_EVENTS 8
     SDL_Event events[NUM_MAX_EVENTS];
-    int num_frame_events = 0;
-    uint32_t start_time = 0, n_out = 0;
+    uint64_t start_time = 0;
+    uint32_t n_out = 0;
     while (1) {
         int num_events = 0;
         SDL_WaitEvent(NULL);
@@ -717,6 +744,20 @@ int main(int argc, char **argv)
             break;
         for (int i = 0; i < num_events; ++i) {
             SDL_Event *e = &events[i];
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+            if (e->type == SDL_EVENT_QUIT) {
+                dp_rd_ctx_request_shutdown(rd_ctx);
+                dp_fifo_flush(rd_ctx->fifo, destroy_pic);
+                goto out;
+            } else if (e->type == SDL_EVENT_WINDOW_RESIZED) {
+                // TODO: Handle window resizes
+            } else if (e->type == SDL_EVENT_WINDOW_EXPOSED) {
+                dp_rd_ctx_render(rd_ctx);
+            } else if (e->type == SDL_EVENT_KEY_DOWN) {
+                if (!dp_rd_ctx_on_key_down(rd_ctx, e->key.key))
+                    goto out;
+            } else
+#else
             if (e->type == SDL_QUIT) {
                 dp_rd_ctx_request_shutdown(rd_ctx);
                 dp_fifo_flush(rd_ctx->fifo, destroy_pic);
@@ -728,26 +769,12 @@ int main(int argc, char **argv)
                     dp_rd_ctx_render(rd_ctx);
                 }
             } else if (e->type == SDL_KEYDOWN) {
-                SDL_KeyboardEvent *kbde = (SDL_KeyboardEvent *)e;
-                if (kbde->keysym.sym == SDLK_SPACE) {
-                    dp_rd_ctx_toggle_pause(rd_ctx);
-                } else if (kbde->keysym.sym == SDLK_ESCAPE) {
-                    dp_rd_ctx_request_shutdown(rd_ctx);
-                    dp_fifo_flush(rd_ctx->fifo, destroy_pic);
+                if (!dp_rd_ctx_on_key_down(rd_ctx, e->key.keysym.sym))
                     goto out;
-                } else if (kbde->keysym.sym == SDLK_LEFT ||
-                           kbde->keysym.sym == SDLK_RIGHT)
-                {
-                    if (kbde->keysym.sym == SDLK_LEFT)
-                        dp_rd_ctx_seek(rd_ctx, -5);
-                    else if (kbde->keysym.sym == SDLK_RIGHT)
-                        dp_rd_ctx_seek(rd_ctx, +5);
-                    dp_fifo_flush(rd_ctx->fifo, destroy_pic);
-                    SDL_FlushEvent(rd_ctx->event_types + DAV1D_EVENT_NEW_FRAME);
-                    num_frame_events = 0;
-                }
-            } else if (e->type == rd_ctx->event_types + DAV1D_EVENT_NEW_FRAME) {
-                num_frame_events++;
+            } else
+#endif
+            if (e->type == rd_ctx->event_types + DAV1D_EVENT_NEW_FRAME) {
+                rd_ctx->num_frame_events++;
                 // Store current ticks for stats calculation
                 if (start_time == 0)
                     start_time = SDL_GetTicks();
@@ -764,7 +791,7 @@ int main(int argc, char **argv)
                 goto out;
             }
         }
-        if (num_frame_events && !dp_rd_ctx_is_paused(rd_ctx)) {
+        if (rd_ctx->num_frame_events && !dp_rd_ctx_is_paused(rd_ctx)) {
             // Dequeue frame and update the render context with it
             Dav1dPicture *p = dp_fifo_shift(rd_ctx->fifo);
             // Do not update textures during termination
@@ -774,14 +801,14 @@ int main(int argc, char **argv)
                 n_out++;
             }
             destroy_pic(p);
-            num_frame_events--;
+            rd_ctx->num_frame_events--;
         }
     }
 
 out:;
     // Print stats
-    uint32_t time_ms = SDL_GetTicks() - start_time - rd_ctx->pause_time;
-    printf("Decoded %u frames in %d seconds, avg %.02f fps\n",
+    uint64_t time_ms = SDL_GetTicks() - start_time - rd_ctx->pause_time;
+    printf("Decoded %" PRIu32 " frames in %" PRIu64 " seconds, avg %.02f fps\n",
            n_out, time_ms / 1000, n_out/ (time_ms / 1000.0));
 
     int decoder_ret = 0;

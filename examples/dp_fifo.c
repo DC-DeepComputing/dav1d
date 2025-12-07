@@ -24,16 +24,17 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <SDL.h>
 #include <assert.h>
+#include <stdlib.h>
 
+#include "dp_compat.h"
 #include "dp_fifo.h"
 
 // FIFO structure
 struct dp_fifo
 {
-    SDL_mutex *lock;
-    SDL_cond *cond_change;
+    SDL_Mutex *lock;
+    SDL_Condition *cond_change;
     size_t capacity;
     size_t count;
     void **entries;
@@ -64,7 +65,7 @@ Dav1dPlayPtrFifo *dp_fifo_create(size_t capacity)
         free(fifo);
         return NULL;
     }
-    fifo->cond_change = SDL_CreateCond();
+    fifo->cond_change = SDL_CreateCondition();
     if (fifo->cond_change == NULL) {
         SDL_DestroyMutex(fifo->lock);
         free(fifo);
@@ -85,7 +86,7 @@ void dp_fifo_destroy(Dav1dPlayPtrFifo *fifo)
 {
     assert(fifo->count == 0);
     SDL_DestroyMutex(fifo->lock);
-    SDL_DestroyCond(fifo->cond_change);
+    SDL_DestroyCondition(fifo->cond_change);
     free(fifo->entries);
     free(fifo);
 }
@@ -96,17 +97,17 @@ void dp_fifo_push(Dav1dPlayPtrFifo *fifo, void *element)
     SDL_LockMutex(fifo->lock);
     while (fifo->count == fifo->capacity) {
         fifo->push_wait = 1;
-        SDL_CondWait(fifo->cond_change, fifo->lock);
+        SDL_WaitCondition(fifo->cond_change, fifo->lock);
         fifo->push_wait = 0;
         if (fifo->flush) {
-            SDL_CondSignal(fifo->cond_change);
+            SDL_SignalCondition(fifo->cond_change);
             SDL_UnlockMutex(fifo->lock);
             return;
         }
     }
     fifo->entries[fifo->count++] = element;
     if (fifo->count == 1)
-        SDL_CondSignal(fifo->cond_change);
+        SDL_SignalCondition(fifo->cond_change);
     SDL_UnlockMutex(fifo->lock);
 }
 
@@ -124,10 +125,10 @@ void *dp_fifo_shift(Dav1dPlayPtrFifo *fifo)
 {
     SDL_LockMutex(fifo->lock);
     while (fifo->count == 0)
-        SDL_CondWait(fifo->cond_change, fifo->lock);
+        SDL_WaitCondition(fifo->cond_change, fifo->lock);
     void *res = dp_fifo_array_shift(fifo->entries, fifo->count--);
     if (fifo->count == fifo->capacity - 1)
-        SDL_CondSignal(fifo->cond_change);
+        SDL_SignalCondition(fifo->cond_change);
     SDL_UnlockMutex(fifo->lock);
     return res;
 }
@@ -137,8 +138,8 @@ void dp_fifo_flush(Dav1dPlayPtrFifo *fifo, void (*destroy_elem)(void *))
     SDL_LockMutex(fifo->lock);
     fifo->flush = 1;
     if (fifo->push_wait) {
-        SDL_CondSignal(fifo->cond_change);
-        SDL_CondWait(fifo->cond_change, fifo->lock);
+        SDL_SignalCondition(fifo->cond_change);
+        SDL_WaitCondition(fifo->cond_change, fifo->lock);
     }
     while (fifo->count)
         destroy_elem(fifo->entries[--fifo->count]);
