@@ -37,6 +37,12 @@
 #define HWCAP_RVV (1 << ('v' - 'a'))
 #endif
 
+unsigned dav1d_vlen_max = 1U << (32 - 1);
+
+COLD void dav1d_set_vlen_max(const unsigned max) {
+    dav1d_vlen_max = max;
+}
+
 int dav1d_has_compliant_rvv(void);
 
 COLD unsigned dav1d_get_cpu_flags_riscv(void) {
