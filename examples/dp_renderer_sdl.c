@@ -48,6 +48,108 @@ typedef struct renderer_priv_ctx
     int tex_w, tex_h;
 } Dav1dPlayRendererPrivateContext;
 
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+
+static inline SDL_MatrixCoefficients sdl_matrix_from_dav1d(enum Dav1dMatrixCoefficients mc)
+{
+    switch (mc) {
+    case DAV1D_MC_IDENTITY:     return SDL_MATRIX_COEFFICIENTS_IDENTITY;
+    case DAV1D_MC_BT709:        return SDL_MATRIX_COEFFICIENTS_BT709;
+    case DAV1D_MC_UNKNOWN:      return SDL_MATRIX_COEFFICIENTS_UNSPECIFIED;
+    case DAV1D_MC_FCC:          return SDL_MATRIX_COEFFICIENTS_FCC;
+    case DAV1D_MC_BT470BG:      return SDL_MATRIX_COEFFICIENTS_BT470BG;
+    case DAV1D_MC_BT601:        return SDL_MATRIX_COEFFICIENTS_BT601;
+    case DAV1D_MC_SMPTE240:     return SDL_MATRIX_COEFFICIENTS_SMPTE240;
+    case DAV1D_MC_SMPTE_YCGCO:  return SDL_MATRIX_COEFFICIENTS_YCGCO;
+    case DAV1D_MC_BT2020_NCL:   return SDL_MATRIX_COEFFICIENTS_BT2020_NCL;
+    case DAV1D_MC_BT2020_CL:    return SDL_MATRIX_COEFFICIENTS_BT2020_CL;
+    case DAV1D_MC_SMPTE2085:    return SDL_MATRIX_COEFFICIENTS_SMPTE2085;
+    case DAV1D_MC_CHROMAT_NCL:  return SDL_MATRIX_COEFFICIENTS_CHROMA_DERIVED_NCL;
+    case DAV1D_MC_CHROMAT_CL:   return SDL_MATRIX_COEFFICIENTS_CHROMA_DERIVED_CL;
+    case DAV1D_MC_ICTCP:        return SDL_MATRIX_COEFFICIENTS_ICTCP;
+    case DAV1D_MC_RESERVED:     return SDL_MATRIX_COEFFICIENTS_UNSPECIFIED;
+    }
+
+    return SDL_MATRIX_COEFFICIENTS_UNSPECIFIED;
+}
+
+static inline SDL_ColorRange sdl_levels_from_dav1d(int color_range)
+{
+    return color_range ? SDL_COLOR_RANGE_FULL : SDL_COLOR_RANGE_LIMITED;
+}
+
+static inline SDL_ColorPrimaries sdl_primaries_from_dav1d(enum Dav1dColorPrimaries prim)
+{
+    switch (prim) {
+    case DAV1D_COLOR_PRI_BT709:         return SDL_COLOR_PRIMARIES_BT709;
+    case DAV1D_COLOR_PRI_UNKNOWN:       return SDL_COLOR_PRIMARIES_UNSPECIFIED;
+    case DAV1D_COLOR_PRI_BT470M:        return SDL_COLOR_PRIMARIES_BT470M;
+    case DAV1D_COLOR_PRI_BT470BG:       return SDL_COLOR_PRIMARIES_BT470BG;
+    case DAV1D_COLOR_PRI_BT601:         return SDL_COLOR_PRIMARIES_BT601;
+    case DAV1D_COLOR_PRI_SMPTE240:      return SDL_COLOR_PRIMARIES_SMPTE240;
+    case DAV1D_COLOR_PRI_FILM:          return SDL_COLOR_PRIMARIES_GENERIC_FILM;
+    case DAV1D_COLOR_PRI_BT2020:        return SDL_COLOR_PRIMARIES_BT2020;
+    case DAV1D_COLOR_PRI_XYZ:           return SDL_COLOR_PRIMARIES_XYZ;
+    case DAV1D_COLOR_PRI_SMPTE431:      return SDL_COLOR_PRIMARIES_SMPTE431;
+    case DAV1D_COLOR_PRI_SMPTE432:      return SDL_COLOR_PRIMARIES_SMPTE432;
+    case DAV1D_COLOR_PRI_EBU3213:       return SDL_COLOR_PRIMARIES_EBU3213;
+    case DAV1D_COLOR_PRI_RESERVED:      return SDL_COLOR_PRIMARIES_UNKNOWN;
+    }
+
+    return SDL_COLOR_PRIMARIES_UNKNOWN;
+}
+
+static inline SDL_TransferCharacteristics sdl_transfer_from_dav1d(enum Dav1dTransferCharacteristics trc)
+{
+    switch (trc) {
+    case DAV1D_TRC_BT709:           return SDL_TRANSFER_CHARACTERISTICS_BT709;
+    case DAV1D_TRC_UNKNOWN:         return SDL_TRANSFER_CHARACTERISTICS_UNSPECIFIED;
+    case DAV1D_TRC_BT470M:          return SDL_TRANSFER_CHARACTERISTICS_GAMMA22;
+    case DAV1D_TRC_BT470BG:         return SDL_TRANSFER_CHARACTERISTICS_GAMMA28;
+    case DAV1D_TRC_BT601:           return SDL_TRANSFER_CHARACTERISTICS_BT601;
+    case DAV1D_TRC_SMPTE240:        return SDL_TRANSFER_CHARACTERISTICS_SMPTE240;
+    case DAV1D_TRC_LINEAR:          return SDL_TRANSFER_CHARACTERISTICS_LINEAR;
+    case DAV1D_TRC_LOG100:          return SDL_TRANSFER_CHARACTERISTICS_LOG100;
+    case DAV1D_TRC_LOG100_SQRT10:   return SDL_TRANSFER_CHARACTERISTICS_LOG100_SQRT10;
+    case DAV1D_TRC_IEC61966:        return SDL_TRANSFER_CHARACTERISTICS_IEC61966;
+    case DAV1D_TRC_BT1361:          return SDL_TRANSFER_CHARACTERISTICS_BT1361;
+    case DAV1D_TRC_SRGB:            return SDL_TRANSFER_CHARACTERISTICS_SRGB;
+    case DAV1D_TRC_BT2020_10BIT:    return SDL_TRANSFER_CHARACTERISTICS_BT2020_10BIT;
+    case DAV1D_TRC_BT2020_12BIT:    return SDL_TRANSFER_CHARACTERISTICS_BT2020_12BIT;
+    case DAV1D_TRC_SMPTE2084:       return SDL_TRANSFER_CHARACTERISTICS_PQ;
+    case DAV1D_TRC_SMPTE428:        return SDL_TRANSFER_CHARACTERISTICS_SMPTE428;;
+    case DAV1D_TRC_HLG:             return SDL_TRANSFER_CHARACTERISTICS_HLG;
+    case DAV1D_TRC_RESERVED:        return SDL_TRANSFER_CHARACTERISTICS_UNKNOWN;
+    }
+
+    return SDL_TRANSFER_CHARACTERISTICS_UNKNOWN;
+}
+
+static inline SDL_ChromaLocation sdl_chroma_from_dav1d(enum Dav1dChromaSamplePosition loc)
+{
+    switch (loc) {
+    case DAV1D_CHR_UNKNOWN:     return SDL_CHROMA_LOCATION_NONE;
+    case DAV1D_CHR_VERTICAL:    return SDL_CHROMA_LOCATION_LEFT;
+    case DAV1D_CHR_COLOCATED:   return SDL_CHROMA_LOCATION_TOPLEFT;
+    }
+
+    return SDL_CHROMA_LOCATION_NONE;
+}
+
+static inline SDL_Colorspace sdl_colorspace_from_dav1d(const Dav1dSequenceHeader *seq_hdr)
+{
+    return SDL_DEFINE_COLORSPACE(
+        SDL_COLOR_TYPE_YCBCR,
+        sdl_levels_from_dav1d(seq_hdr->color_range),
+        sdl_primaries_from_dav1d(seq_hdr->pri),
+        sdl_transfer_from_dav1d(seq_hdr->trc),
+        sdl_matrix_from_dav1d(seq_hdr->mtrx),
+        sdl_chroma_from_dav1d(seq_hdr->chr)
+    );
+}
+
+#endif
+
 static void *sdl_renderer_create(const Dav1dPlaySettings *settings)
 {
     SDL_Window *win = dp_create_sdl_window(0, settings->fullscreen);
@@ -158,11 +260,19 @@ static int sdl_update_texture(void *cookie, Dav1dPicture *dav1d_pic,
     }
 
     if (texture == NULL) {
-        texture = SDL_CreateTexture(rd_priv_ctx->renderer, SDL_PIXELFORMAT_IYUV,
-            SDL_TEXTUREACCESS_STREAMING, width, height);
 #if SDL_VERSION_ATLEAST(3, 0, 0)
+        SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, sdl_colorspace_from_dav1d(dav1d_pic->seq_hdr));
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, SDL_PIXELFORMAT_IYUV);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER, SDL_TEXTUREACCESS_STREAMING);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, width);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, height);
+        texture = SDL_CreateTextureWithProperties(rd_priv_ctx->renderer, props);
+        SDL_DestroyProperties(props);
         SDL_SetRenderLogicalPresentation(rd_priv_ctx->renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 #else
+        texture = SDL_CreateTexture(rd_priv_ctx->renderer, SDL_PIXELFORMAT_IYUV,
+            SDL_TEXTUREACCESS_STREAMING, width, height);
         SDL_RenderSetLogicalSize(rd_priv_ctx->renderer, width, height);
 #endif
     }
