@@ -162,7 +162,11 @@ build-debian-examples:
         - meson setup build --buildtype release
                             --werror
                             -Denable_examples=true
+                            -Dsdl_version=${SDL_VERSION}
         - ninja -C build
+    parallel:
+      matrix:
+        - SDL_VERSION: [2, 3]
 
 build-debian-no-tools:
     extends: .debian-amd64-common
