@@ -52,22 +52,25 @@ dav1d_output_sources = files(
     'output/yuv.c',
 )
 
-# hacky check for xxhash.h to allow copying it to tools/output
 if not get_option('xxhash_muxer').disabled()
-    xxhash_include = '-I' + meson.current_source_dir() / 'output'
-    if cc.has_header_symbol('xxhash.h', 'XXH3_createState', args : xxhash_include)
+    xxhash_dependency = dependency('libxxhash',
+        fallback: ['xxhash', 'xxhash_dep'],
+        default_options: ['cli=false'],
+        required: get_option('xxhash_muxer').enabled()
+    )
+    if xxhash_dependency.found()
         dav1d_output_sources += 'output/xxhash.c'
         xxh3_found = true
-    elif get_option('xxhash_muxer').enabled()
-        # manual error since 'required' kw arg in has_header_symbol() was only added in meson 0.50
-        error( 'Requested xxhash_muxer to be built, but no usable xxhash.h was found.')
     endif
+else
+    xxhash_dependency = []
 endif
 
 dav1d_output_objs = static_library('dav1d_output',
     dav1d_output_sources,
 
     include_directories : dav1d_inc_dirs,
+    dependencies : [xxhash_dependency],
     install : false,
     build_by_default : false,
 )
