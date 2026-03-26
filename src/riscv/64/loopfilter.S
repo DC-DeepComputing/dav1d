@@ -7,60 +7,101 @@
 
 function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     # Arguments:
-    # a0 = dst, a1 = stride, a2 = mask, a3 = lvl, a4 = lvl_stride, a5 = lut, a6 = w
+    # a0 = dst, a1 = stride, a2 = vmask, a3 = lvl, a4 = lvl_stride, a5 = lut, a6 = w
+    
+    # Save required registers (using caller-saved t-registers for temp logic)
+    # t0 = vmask[0], t1 = vmask[1], t2 = vmask[2]
+    lw t0, 0(a2)
+    lw t1, 4(a2)
+    lw t2, 8(a2)
+    
+    # vm = vmask[0] | vmask[1] | vmask[2]
+    or t3, t0, t1
+    or t3, t3, t2
+    beqz t3, .Lend   # if (!vm) return
 
-1:
-    # Process up to 'w' rows in parallel
-    vsetvli t1, a6, e8, m1, ta, ma
+    # x = 1 (column iterator bitmask)
+    li t4, 1
 
-    # Calculate pointers to columns
-    # dst (a0) points to q0
-    addi t2, a0, -4
-    vlse8.v v0, (t2), a1  # load column p3
-    addi t2, a0, -3
-    vlse8.v v1, (t2), a1  # load column p2
-    addi t2, a0, -2
-    vlse8.v v2, (t2), a1  # load column p1
-    addi t2, a0, -1
-    vlse8.v v3, (t2), a1  # load column p0
+.Lloop_x:
+    # Check if vm & ~(x - 1) == 0 (early exit if no more bits set)
+    addi t5, t4, -1
+    not t5, t5
+    and t5, t3, t5
+    beqz t5, .Lend
 
-    vlse8.v v4, (a0), a1  # load column q0
-    addi t2, a0, 1
-    vlse8.v v5, (t2), a1  # load column q1
-    addi t2, a0, 2
-    vlse8.v v6, (t2), a1  # load column q2
-    addi t2, a0, 3
-    vlse8.v v7, (t2), a1  # load column q3
+    # Check if vm & x
+    and t5, t3, t4
+    beqz t5, .Lnext_x
 
-    # --- Filter logic will go here in phase 2 ---
-    # Calculations like vector p0 - q0 can now be simply:
-    # vsub.vv v_diff, v3, v4
+    # Load L = l[0][0] ? l[0][0] : l[-b4_stride][0]
+    lbu t5, 0(a3)
+    bnez t5, .Lhas_L
+    sub t6, a3, a4    # l - b4_stride
+    lbu t5, 0(t6)
+    beqz t5, .Lnext_x # if (!L) continue
+.Lhas_L:
+    
+    # Calculate H = L >> 4
+    srliw a7, t5, 4
+    
+    # Calculate E = lut->e[L], I = lut->i[L]
+    # lut structure: uint8_t e[64], i[64];
+    add t6, a5, t5
+    lbu t5, 0(t6)     # E
+    lbu t6, 64(t6)    # I
 
-    # Store the result (currently just a stub storing unmodified pixels)
-    addi t2, a0, -4
-    vsse8.v v0, (t2), a1
-    addi t2, a0, -3
-    vsse8.v v1, (t2), a1
-    addi t2, a0, -2
-    vsse8.v v2, (t2), a1
-    addi t2, a0, -1
-    vsse8.v v3, (t2), a1
+    # Determine wd: idx = (vmask[2] & x) ? 2 : !!(vmask[1] & x)
+    and t5, t2, t4    # vmask[2] & x
+    bnez t5, .Lidx_2
+    and t5, t1, t4    # vmask[1] & x
+    snez t5, t5       # 1 if vmask[1] & x, else 0
+    j .Lidx_done
+.Lidx_2:
+    li t5, 2
+.Lidx_done:
+    # wd = 4 << idx
+    li t6, 4
+    sllw a7, t6, t5   # Now a7 holds wd. (E, I, H are in vector logic)
 
-    vsse8.v v4, (a0), a1
-    addi t2, a0, 1
-    vsse8.v v5, (t2), a1
-    addi t2, a0, 2
-    vsse8.v v6, (t2), a1
-    addi t2, a0, 3
-    vsse8.v v7, (t2), a1
+    # ==== INNER VECTOR BLOCK (Processing 4 columns) ====
+    # Process exactly 4 columns for this specific E, I, H
+    vsetivli zero, 4, e8, m1, ta, ma
 
-    # Advance a0 down by (vl * stride) rows
-    mul t2, t1, a1
-    add a0, a0, t2
+    # Calculate row pointers (dst points to row q0)
+    sub t5, a0, a1  # p0
+    sub t6, t5, a1  # p1
+    # ... more pointers can be calculated here based on wd
 
-    # Decrement 'w' by the number of elements processed
-    sub a6, a6, t1
-    bnez a6, 1b
+    # Load rows for p1, p0, q0, q1
+    vle8.v v_p1, (t6)
+    vle8.v v_p0, (t5)
+    vle8.v v_q0, (a0)
+    add t5, a0, a1
+    vle8.v v_q1, (t5)
 
+    # --- Filter logic computations (Phase 2 core math) ---
+    # abs(p1 - p0) <= I, abs(p0 - q0)*2 + ... <= E
+    # (Left as a stub to be filled in with complete filter equations)
+
+    # Store backward (currently unmodified pixels)
+    sub t5, a0, a1
+    sub t6, t5, a1
+    vse8.v v_p1, (t6)
+    vse8.v v_p0, (t5)
+    vse8.v v_q0, (a0)
+    add t5, a0, a1
+    vse8.v v_q1, (t5)
+
+.Lnext_x:
+    # Advance x by shifting left
+    slli t4, t4, 1
+    # dst += 4
+    addi a0, a0, 4
+    # l++ (lvl map iterates by 1 byte per 4-pixel column)
+    addi a3, a3, 1
+    j .Lloop_x
+
+.Lend:
     ret
 endfunc
