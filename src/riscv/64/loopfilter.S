@@ -9,28 +9,57 @@ function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     # Arguments:
     # a0 = dst, a1 = stride, a2 = mask, a3 = lvl, a4 = lvl_stride, a5 = lut, a6 = w
 
-    # 1. Setup RVV to process 8 elements at a time (e.g., 4 left, 4 right of edge)
-    #    e8 = 8-bit elements, m1 = 1 vector register, ta = tail agnostic, ma = mask agnostic
-    li t0, 8
-    vsetvli t1, t0, e8, m1, ta, ma
-
-    # Start loading from 'dst - 4' to get the edge pixels
-    addi a0, a0, -4
-
 1:
-    # Load 8 pixels across the vertical edge
-    vle8.v v0, (a0)
+    # Process up to 'w' rows in parallel
+    vsetvli t1, a6, e8, m1, ta, ma
 
-    # --- Filter logic will go here in Phase 2 ---
+    # Calculate pointers to columns
+    # dst (a0) points to q0
+    addi t2, a0, -4
+    vlse8.v v0, (t2), a1  # load column p3
+    addi t2, a0, -3
+    vlse8.v v1, (t2), a1  # load column p2
+    addi t2, a0, -2
+    vlse8.v v2, (t2), a1  # load column p1
+    addi t2, a0, -1
+    vlse8.v v3, (t2), a1  # load column p0
 
-    # Store the 8 pixels exactly as they were
-    vse8.v v0, (a0)
+    vlse8.v v4, (a0), a1  # load column q0
+    addi t2, a0, 1
+    vlse8.v v5, (t2), a1  # load column q1
+    addi t2, a0, 2
+    vlse8.v v6, (t2), a1  # load column q2
+    addi t2, a0, 3
+    vlse8.v v7, (t2), a1  # load column q3
 
-    # Move dst down to the next row (dst += stride)
-    add a0, a0, a1
+    # --- Filter logic will go here in phase 2 ---
+    # Calculations like vector p0 - q0 can now be simply:
+    # vsub.vv v_diff, v3, v4
 
-    # Decrement row counter 'w' and loop if not zero
-    addi a6, a6, -1
+    # Store the result (currently just a stub storing unmodified pixels)
+    addi t2, a0, -4
+    vsse8.v v0, (t2), a1
+    addi t2, a0, -3
+    vsse8.v v1, (t2), a1
+    addi t2, a0, -2
+    vsse8.v v2, (t2), a1
+    addi t2, a0, -1
+    vsse8.v v3, (t2), a1
+
+    vsse8.v v4, (a0), a1
+    addi t2, a0, 1
+    vsse8.v v5, (t2), a1
+    addi t2, a0, 2
+    vsse8.v v6, (t2), a1
+    addi t2, a0, 3
+    vsse8.v v7, (t2), a1
+
+    # Advance a0 down by (vl * stride) rows
+    mul t2, t1, a1
+    add a0, a0, t2
+
+    # Decrement 'w' by the number of elements processed
+    sub a6, a6, t1
     bnez a6, 1b
 
     ret
