@@ -8,13 +8,13 @@
 function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     # Arguments:
     # a0 = dst, a1 = stride, a2 = vmask, a3 = lvl, a4 = lvl_stride, a5 = lut, a6 = w
-    
+
     # Save required registers (using caller-saved t-registers for temp logic)
     # t0 = vmask[0], t1 = vmask[1], t2 = vmask[2]
     lw t0, 0(a2)
     lw t1, 4(a2)
     lw t2, 8(a2)
-    
+
     # vm = vmask[0] | vmask[1] | vmask[2]
     or t3, t0, t1
     or t3, t3, t2
@@ -41,10 +41,10 @@ function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     lbu t5, 0(t6)
     beqz t5, .Lnext_x # if (!L) continue
 .Lhas_L:
-    
+
     # Calculate H = L >> 4
     srli a7, t5, 4
-    
+
     # Calculate E = lut->e[L], I = lut->i[L]
     # lut structure: uint8_t e[64], i[64];
     add t6, a5, t5
