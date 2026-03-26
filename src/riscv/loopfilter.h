@@ -6,6 +6,7 @@
 #include "src/cpu.h"
 #include "src/loopfilter.h"
 
+/* LCOV_EXCL_START */
 decl_loopfilter_sb_fn(BF(dav1d_lpf_v_sb_y, rvv));
 
 static ALWAYS_INLINE void loop_filter_dsp_init_riscv(Dav1dLoopFilterDSPContext *const c) {
@@ -15,3 +16,4 @@ static ALWAYS_INLINE void loop_filter_dsp_init_riscv(Dav1dLoopFilterDSPContext *
 
     (void)c;
 }
+/* LCOV_EXCL_STOP */

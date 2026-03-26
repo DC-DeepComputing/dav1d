@@ -252,7 +252,7 @@ static void loop_filter_v_sb128uv_c(pixel *dst, const ptrdiff_t stride,
 #elif ARCH_PPC64LE
 #include "src/ppc/loopfilter.h"
 #elif ARCH_RISCV
-//#include "src/riscv/loopfilter.h"
+#include "src/riscv/loopfilter.h"
 #elif ARCH_X86
 #include "src/x86/loopfilter.h"
 #endif
@@ -272,7 +272,7 @@ COLD void bitfn(dav1d_loop_filter_dsp_init)(Dav1dLoopFilterDSPContext *const c) 
 #elif ARCH_PPC64LE
     loop_filter_dsp_init_ppc(c);
 #elif ARCH_RISCV
-//    loop_filter_dsp_init_riscv(c); // Temporarily decoupled to bypass x86 coverage reduction
+    loop_filter_dsp_init_riscv(c);
 #elif ARCH_X86
     loop_filter_dsp_init_x86(c);
 #endif
