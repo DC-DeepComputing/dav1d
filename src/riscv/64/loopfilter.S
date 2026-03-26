@@ -43,7 +43,7 @@ function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
 .Lhas_L:
     
     # Calculate H = L >> 4
-    srliw a7, t5, 4
+    srli a7, t5, 4
     
     # Calculate E = lut->e[L], I = lut->i[L]
     # lut structure: uint8_t e[64], i[64];
@@ -74,11 +74,11 @@ function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     # ... more pointers can be calculated here based on wd
 
     # Load rows for p1, p0, q0, q1
-    vle8.v v_p1, (t6)
-    vle8.v v_p0, (t5)
-    vle8.v v_q0, (a0)
+    vle8.v v1, (t6)
+    vle8.v v0, (t5)
+    vle8.v v2, (a0)
     add t5, a0, a1
-    vle8.v v_q1, (t5)
+    vle8.v v3, (t5)
 
     # --- Filter logic computations (Phase 2 core math) ---
     # abs(p1 - p0) <= I, abs(p0 - q0)*2 + ... <= E
@@ -87,11 +87,11 @@ function lpf_v_sb_y_8bpc_rvv, export=1, ext=v
     # Store backward (currently unmodified pixels)
     sub t5, a0, a1
     sub t6, t5, a1
-    vse8.v v_p1, (t6)
-    vse8.v v_p0, (t5)
-    vse8.v v_q0, (a0)
+    vse8.v v1, (t6)
+    vse8.v v0, (t5)
+    vse8.v v2, (a0)
     add t5, a0, a1
-    vse8.v v_q1, (t5)
+    vse8.v v3, (t5)
 
 .Lnext_x:
     # Advance x by shifting left
