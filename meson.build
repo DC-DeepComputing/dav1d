@@ -154,7 +154,7 @@ else
     rt_dependency = []
     if cc.has_function('clock_gettime', prefix : '#include <time.h>', args : test_args)
         have_clock_gettime = true
-    elif host_machine.system() not in ['darwin', 'ios', 'tvos']
+    elif host_machine.system() not in ['darwin', 'ios', 'tvos', 'dos']
         rt_dependency = cc.find_library('rt', required: false)
         if not cc.has_function('clock_gettime', prefix : '#include <time.h>', args : test_args, dependencies : rt_dependency)
             error('clock_gettime not found')
@@ -164,7 +164,7 @@ else
 
     have_sigaction = cc.has_function('sigaction', prefix : '#include <signal.h>', args : test_args)
     have_posix_memalign = cc.has_function('posix_memalign', prefix : '#include <stdlib.h>', args : test_args)
-    have_memalign = cc.has_function('memalign', prefix : '#include <malloc.h>', args : test_args)
+    have_memalign = cc.has_function('memalign', prefix : '#include <malloc.h>', args : test_args) and host_machine.system() != 'dos'
     have_aligned_alloc = cc.has_function('aligned_alloc', prefix : '#include <stdlib.h>', args : test_args)
 endif
 
@@ -292,7 +292,7 @@ if cc.get_argument_syntax() != 'msvc'
       '-Werror=missing-prototypes',
       '-Wshorten-64-to-32',
     ]
-    if host_machine.cpu_family() == 'x86'
+    if host_machine.cpu_family() == 'x86' and host_machine.system() != 'dos'
         optional_arguments += [
           '-msse2',
           '-mfpmath=sse',
@@ -523,7 +523,7 @@ cdata.set10('ARCH_LOONGARCH64', host_machine.cpu_family() == 'loongarch64')
 # meson's cc.symbols_have_underscore_prefix() is unfortunately unrelieably
 # when additional flags like '-fprofile-instr-generate' are passed via CFLAGS
 # see following meson issue https://github.com/mesonbuild/meson/issues/5482
-if (host_machine.system() in ['darwin', 'ios', 'tvos', 'os/2'] or
+if (host_machine.system() in ['darwin', 'ios', 'tvos', 'os/2', 'dos'] or
    (host_machine.system() == 'windows' and host_machine.cpu_family() == 'x86'))
     cdata.set10('PREFIX', true)
     cdata_asm.set10('PREFIX', true)
@@ -565,6 +565,8 @@ if is_asm_enabled and host_machine.cpu_family().startswith('x86')
         else
             nasm_format = 'aout'
         endif
+    elif host_machine.system() == 'dos'
+        nasm_format = 'coff'
     elif host_machine.cpu_family() == 'x86_64'
         nasm_format += '64'
     else
