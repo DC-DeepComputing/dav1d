@@ -288,9 +288,9 @@ void checkasm_check_msac(void) {
         c.decode_symbol_adapt4  = dav1d_msac_decode_symbol_adapt4_sse2;
         c.decode_symbol_adapt8  = dav1d_msac_decode_symbol_adapt8_sse2;
         c.decode_symbol_adapt16 = dav1d_msac_decode_symbol_adapt16_sse2;
-        c.decode_bool_adapt     = dav1d_msac_decode_bool_adapt_sse2;
-        c.decode_bool_equi      = dav1d_msac_decode_bool_equi_sse2;
-        c.decode_bool           = dav1d_msac_decode_bool_sse2;
+        c.decode_bool_adapt     = dav1d_msac_decode_bool_adapt_cmov;
+        c.decode_bool_equi      = dav1d_msac_decode_bool_equi_cmov;
+        c.decode_bool           = dav1d_msac_decode_bool_cmov;
         c.decode_hi_tok         = dav1d_msac_decode_hi_tok_sse2;
     }
 

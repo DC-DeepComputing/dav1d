@@ -83,6 +83,122 @@ DECLARE_REG_TMP 2, 3, 4, 1, 5, 6, 5, 2, 3
 %define buf esp+8
 %endif
 
+cglobal msac_decode_bool_adapt_cmov, 0, 6, 0
+    movifnidn      t1, r1mp
+    movifnidn      t0, r0mp
+    movzx         eax, word [t1]
+    movzx         t3d, byte [t0+msac.rng+1]
+    mov            t4, [t0+msac.dif]
+    mov           t2d, [t0+msac.rng]
+%if ARCH_X86_64
+    mov           t5d, eax
+%endif
+    and           eax, ~63
+    imul          eax, t3d
+%if UNIX64
+    mov            t6, t4
+%endif
+    shr           eax, 7
+    add           eax, 4            ; v
+    mov           t3d, eax
+    shl           rax, gprsize*8-16 ; vw
+    sub           t2d, t3d          ; r - v
+    sub            t4, rax          ; dif - vw
+    setb           al
+    cmovb         t2d, t3d
+    mov           t3d, [t0+msac.update_cdf]
+%if UNIX64
+    cmovb          t4, t6
+%else
+    cmovb          t4, [t0+msac.dif]
+%endif
+%if ARCH_X86_64 == 0
+    movzx         eax, al
+%endif
+    test          t3d, t3d
+    jz m(msac_decode_symbol_adapt4, _sse2).renorm3
+%if UNIX64 == 0
+    push           t6
+%endif
+    movzx         t6d, word [t1+2]
+%if ARCH_X86_64 == 0
+    push           t5
+    movzx         t5d, word [t1]
+%endif
+    movifnidn      t7, t0
+    lea           ecx, [t6+64]
+    cmp           t6d, 32
+    adc           t6d, 0
+    mov        [t1+2], t6w
+    imul          t6d, eax, -32769
+    shr           ecx, 4   ; rate
+    add           t6d, t5d ; if (bit)
+    sub           t5d, eax ;     cdf[0] -= ((cdf[0] - 32769) >> rate) + 1;
+    sar           t6d, cl  ; else
+    sub           t5d, t6d ;     cdf[0] -= cdf[0] >> rate;
+    mov          [t1], t5w
+%if WIN64
+    mov           t1d, [t7+msac.cnt]
+    pop            t6
+    jmp m(msac_decode_symbol_adapt4, _sse2).renorm4
+%else
+%if ARCH_X86_64 == 0
+    pop            t5
+    pop            t6
+%endif
+    jmp m(msac_decode_symbol_adapt4, _sse2).renorm3
+%endif
+
+cglobal msac_decode_bool_equi_cmov, 0, 6, 0
+    movifnidn      t0, r0mp
+    mov           t1d, [t0+msac.rng]
+    mov            t4, [t0+msac.dif]
+    mov           t2d, t1d
+    mov           t1b, 8
+    mov            t3, t4
+    mov           eax, t1d
+    shr           t1d, 1            ; v
+    shl           rax, gprsize*8-17 ; vw
+    sub           t2d, t1d          ; r - v
+    sub            t4, rax          ; dif - vw
+    cmovb         t2d, t1d
+    mov           t1d, [t0+msac.cnt]
+    cmovb          t4, t3
+    movifnidn      t7, t0
+    mov           ecx, 0xbfff
+    setb           al ; the upper 32 bits contains garbage but that's OK
+    sub           ecx, t2d
+    ; In this case of this function, (d =) 16 - clz(v) = 2 - (v >> 14)
+    ;   i.e. (0 <= d <= 2) and v < (3 << 14)
+    shr           ecx, 14           ; d
+%if ARCH_X86_64 == 0
+    movzx         eax, al
+%endif
+    jmp m(msac_decode_symbol_adapt4, _sse2).renorm5
+
+cglobal msac_decode_bool_cmov, 0, 6, 0
+    movifnidn      t0, r0mp
+    movifnidn     t1d, r1m
+    movzx         eax, byte [t0+msac.rng+1] ; r >> 8
+    mov            t4, [t0+msac.dif]
+    mov           t2d, [t0+msac.rng]
+    and           t1d, ~63
+    imul          eax, t1d
+    mov            t3, t4
+    shr           eax, 7
+    add           eax, 4            ; v
+    mov           t1d, eax
+    shl           rax, gprsize*8-16 ; vw
+    sub           t2d, t1d          ; r - v
+    sub            t4, rax          ; dif - vw
+    cmovb         t2d, t1d
+    cmovb          t4, t3
+    setb           al
+%if ARCH_X86_64 == 0
+    movzx         eax, al
+%endif
+    jmp m(msac_decode_symbol_adapt4, _sse2).renorm3
+
 INIT_XMM sse2
 cglobal msac_decode_symbol_adapt4, 0, 6, 6
     DECODE_SYMBOL_ADAPT_INIT
@@ -336,122 +452,6 @@ cglobal msac_decode_symbol_adapt16, 0, 6, 6
     add           rsp, 48
 %endif
     jmp m(msac_decode_symbol_adapt4, SUFFIX).renorm2
-
-cglobal msac_decode_bool_adapt, 0, 6, 0
-    movifnidn      t1, r1mp
-    movifnidn      t0, r0mp
-    movzx         eax, word [t1]
-    movzx         t3d, byte [t0+msac.rng+1]
-    mov            t4, [t0+msac.dif]
-    mov           t2d, [t0+msac.rng]
-%if ARCH_X86_64
-    mov           t5d, eax
-%endif
-    and           eax, ~63
-    imul          eax, t3d
-%if UNIX64
-    mov            t6, t4
-%endif
-    shr           eax, 7
-    add           eax, 4            ; v
-    mov           t3d, eax
-    shl           rax, gprsize*8-16 ; vw
-    sub           t2d, t3d          ; r - v
-    sub            t4, rax          ; dif - vw
-    setb           al
-    cmovb         t2d, t3d
-    mov           t3d, [t0+msac.update_cdf]
-%if UNIX64
-    cmovb          t4, t6
-%else
-    cmovb          t4, [t0+msac.dif]
-%endif
-%if ARCH_X86_64 == 0
-    movzx         eax, al
-%endif
-    test          t3d, t3d
-    jz m(msac_decode_symbol_adapt4, SUFFIX).renorm3
-%if UNIX64 == 0
-    push           t6
-%endif
-    movzx         t6d, word [t1+2]
-%if ARCH_X86_64 == 0
-    push           t5
-    movzx         t5d, word [t1]
-%endif
-    movifnidn      t7, t0
-    lea           ecx, [t6+64]
-    cmp           t6d, 32
-    adc           t6d, 0
-    mov        [t1+2], t6w
-    imul          t6d, eax, -32769
-    shr           ecx, 4   ; rate
-    add           t6d, t5d ; if (bit)
-    sub           t5d, eax ;     cdf[0] -= ((cdf[0] - 32769) >> rate) + 1;
-    sar           t6d, cl  ; else
-    sub           t5d, t6d ;     cdf[0] -= cdf[0] >> rate;
-    mov          [t1], t5w
-%if WIN64
-    mov           t1d, [t7+msac.cnt]
-    pop            t6
-    jmp m(msac_decode_symbol_adapt4, SUFFIX).renorm4
-%else
-%if ARCH_X86_64 == 0
-    pop            t5
-    pop            t6
-%endif
-    jmp m(msac_decode_symbol_adapt4, SUFFIX).renorm3
-%endif
-
-cglobal msac_decode_bool_equi, 0, 6, 0
-    movifnidn      t0, r0mp
-    mov           t1d, [t0+msac.rng]
-    mov            t4, [t0+msac.dif]
-    mov           t2d, t1d
-    mov           t1b, 8
-    mov            t3, t4
-    mov           eax, t1d
-    shr           t1d, 1            ; v
-    shl           rax, gprsize*8-17 ; vw
-    sub           t2d, t1d          ; r - v
-    sub            t4, rax          ; dif - vw
-    cmovb         t2d, t1d
-    mov           t1d, [t0+msac.cnt]
-    cmovb          t4, t3
-    movifnidn      t7, t0
-    mov           ecx, 0xbfff
-    setb           al ; the upper 32 bits contains garbage but that's OK
-    sub           ecx, t2d
-    ; In this case of this function, (d =) 16 - clz(v) = 2 - (v >> 14)
-    ;   i.e. (0 <= d <= 2) and v < (3 << 14)
-    shr           ecx, 14           ; d
-%if ARCH_X86_64 == 0
-    movzx         eax, al
-%endif
-    jmp m(msac_decode_symbol_adapt4, SUFFIX).renorm5
-
-cglobal msac_decode_bool, 0, 6, 0
-    movifnidn      t0, r0mp
-    movifnidn     t1d, r1m
-    movzx         eax, byte [t0+msac.rng+1] ; r >> 8
-    mov            t4, [t0+msac.dif]
-    mov           t2d, [t0+msac.rng]
-    and           t1d, ~63
-    imul          eax, t1d
-    mov            t3, t4
-    shr           eax, 7
-    add           eax, 4            ; v
-    mov           t1d, eax
-    shl           rax, gprsize*8-16 ; vw
-    sub           t2d, t1d          ; r - v
-    sub            t4, rax          ; dif - vw
-    cmovb         t2d, t1d
-    cmovb          t4, t3
-    setb           al
-%if ARCH_X86_64 == 0
-    movzx         eax, al
-%endif
-    jmp m(msac_decode_symbol_adapt4, SUFFIX).renorm3
 
 %macro HI_TOK 1 ; update_cdf
 %if ARCH_X86_64 == 0
