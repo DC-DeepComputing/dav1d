@@ -113,7 +113,7 @@ int output_open(MuxerContext **const c_out,
             return -1;
         }
         for (i = 0; muxers[i]; i++) {
-            if (!strcmp(muxers[i]->extension, ext)) {
+            if (!strcasecmp(muxers[i]->extension, ext)) {
                 impl = muxers[i];
                 break;
             }
