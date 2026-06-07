@@ -102,7 +102,7 @@ int output_open(MuxerContext **const c_out,
         }
         if (!muxers[i]) {
             fprintf(stderr, "Failed to find muxer named \"%s\"\n", name);
-            return DAV1D_ERR(ENOPROTOOPT);
+            return DAV1D_ERR(EINVAL);
         }
     } else if (!strcmp(filename, "/dev/null")) {
         impl = muxers[0];
@@ -113,14 +113,14 @@ int output_open(MuxerContext **const c_out,
             return -1;
         }
         for (i = 0; muxers[i]; i++) {
-            if (!strcmp(muxers[i]->extension, ext)) {
+            if (!strcasecmp(muxers[i]->extension, ext)) {
                 impl = muxers[i];
                 break;
             }
         }
         if (!muxers[i]) {
             fprintf(stderr, "Failed to find muxer for extension \"%s\"\n", ext);
-            return DAV1D_ERR(ENOPROTOOPT);
+            return DAV1D_ERR(EINVAL);
         }
     }
 

@@ -71,7 +71,7 @@ int input_open(DemuxerContext **const c_out,
         }
         if (!demuxers[i]) {
             fprintf(stderr, "Failed to find demuxer named \"%s\"\n", name);
-            return DAV1D_ERR(ENOPROTOOPT);
+            return DAV1D_ERR(EINVAL);
         }
     } else {
         int probe_sz = 0;
@@ -107,7 +107,7 @@ int input_open(DemuxerContext **const c_out,
             fprintf(stderr,
                     "Failed to probe demuxer for file %s\n",
                     filename);
-            return DAV1D_ERR(ENOPROTOOPT);
+            return DAV1D_ERR(EINVAL);
         }
     }
 

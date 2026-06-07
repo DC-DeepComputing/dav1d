@@ -76,12 +76,18 @@ static uint64_t get_time_nanos(void) {
     mach_timebase_info_data_t info;
     mach_timebase_info(&info);
     return mach_absolute_time() * info.numer / info.denom;
+#elif defined(__DJGPP__)
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return 1000000000ULL * tv.tv_sec + 1000ULL * tv.tv_usec;
 #endif
 }
 
 static void sleep_nanos(uint64_t d) {
 #ifdef _WIN32
     Sleep((unsigned)(d / 1000000));
+#elif defined(__DJGPP__)
+    usleep((unsigned)(d / 1000));
 #else
     const struct timespec ts = {
         .tv_sec = (time_t)(d / 1000000000),

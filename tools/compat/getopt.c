@@ -57,7 +57,7 @@
 #include <stdio.h>
 #ifdef _WIN32
 #include <windows.h>
-#else
+#elif !defined(__DJGPP__)
 #include <err.h>
 #endif
 
@@ -111,8 +111,11 @@ static const char noarg[] = "option doesn't take an argument -- %.*s";
 static const char illoptchar[] = "unknown option -- %c";
 static const char illoptstring[] = "unknown option -- %s";
 
-#ifdef _WIN32
-#ifndef __CYGWIN__
+#if defined(_WIN32) || defined(__DJGPP__)
+#ifdef __DJGPP__
+#include <crt0.h>
+#define __progname __crt0_argv[0]
+#elif !defined(__CYGWIN__)
 #define __progname __argv[0]
 #else
 extern char __declspec(dllimport) *__progname;

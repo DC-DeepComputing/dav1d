@@ -38,9 +38,9 @@ unsigned dav1d_msac_decode_symbol_adapt16_sse2(MsacContext *s, uint16_t *cdf,
                                                size_t n_symbols);
 unsigned dav1d_msac_decode_symbol_adapt16_avx2(MsacContext *s, uint16_t *cdf,
                                                size_t n_symbols);
-unsigned dav1d_msac_decode_bool_adapt_sse2(MsacContext *s, uint16_t *cdf);
-unsigned dav1d_msac_decode_bool_equi_sse2(MsacContext *s);
-unsigned dav1d_msac_decode_bool_sse2(MsacContext *s, unsigned f);
+unsigned dav1d_msac_decode_bool_adapt_cmov(MsacContext *s, uint16_t *cdf);
+unsigned dav1d_msac_decode_bool_equi_cmov(MsacContext *s);
+unsigned dav1d_msac_decode_bool_cmov(MsacContext *s, unsigned f);
 unsigned dav1d_msac_decode_hi_tok_sse2(MsacContext *s, uint16_t *cdf);
 
 #if ARCH_X86_64 || defined(__SSE2__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
@@ -49,9 +49,11 @@ unsigned dav1d_msac_decode_hi_tok_sse2(MsacContext *s, uint16_t *cdf);
 #define dav1d_msac_decode_hi_tok         dav1d_msac_decode_hi_tok_sse2
 #endif
 
-#define dav1d_msac_decode_bool_adapt     dav1d_msac_decode_bool_adapt_sse2
-#define dav1d_msac_decode_bool_equi      dav1d_msac_decode_bool_equi_sse2
-#define dav1d_msac_decode_bool           dav1d_msac_decode_bool_sse2
+#if ARCH_X86_64 || defined(__SSE2__) || defined(__i686__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+#define dav1d_msac_decode_bool_adapt     dav1d_msac_decode_bool_adapt_cmov
+#define dav1d_msac_decode_bool_equi      dav1d_msac_decode_bool_equi_cmov
+#define dav1d_msac_decode_bool           dav1d_msac_decode_bool_cmov
+#endif
 
 #if ARCH_X86_64
 #define dav1d_msac_decode_symbol_adapt16(ctx, cdf, symb) ((ctx)->symbol_adapt16(ctx, cdf, symb))

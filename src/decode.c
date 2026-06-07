@@ -3410,7 +3410,7 @@ int dav1d_submit_frame(Dav1dContext *const c) {
         default:
             dav1d_log(c, "Compiled without support for %d-bit decoding\n",
                     8 + 2 * f->seq_hdr->hbd);
-            res = DAV1D_ERR(ENOPROTOOPT);
+            res = DAV1D_ERR(EINVAL);
             goto error;
         }
     }
