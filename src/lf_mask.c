@@ -181,8 +181,8 @@ static inline void mask_edges_intra(uint16_t (*const masks)[32][3][2],
     // inner (tx) left|right edges
     const int hstep = t_dim->w;
     unsigned t = 1U << by4;
-    unsigned inner = (unsigned) ((((uint64_t) t) << h4) - t);
-    unsigned inner1 = inner & 0xffff, inner2 = inner >> 16;
+    const unsigned inner = (unsigned) ((((uint64_t) t) << h4) - t);
+    const unsigned inner1 = inner & 0xffff, inner2 = inner >> 16;
     for (x = hstep; x < w4; x += hstep) {
         if (inner1) masks[0][bx4 + x][twl4c][0] |= inner1;
         if (inner2) masks[0][bx4 + x][twl4c][1] |= inner2;
@@ -193,12 +193,12 @@ static inline void mask_edges_intra(uint16_t (*const masks)[32][3][2],
     //           bottom
     const int vstep = t_dim->h;
     t = 1U << bx4;
-    inner = (unsigned) ((((uint64_t) t) << w4) - t);
-    inner1 = inner & 0xffff;
-    inner2 = inner >> 16;
+    const unsigned inner_v = (unsigned) ((((uint64_t) t) << w4) - t);
+    const unsigned inner1_v = inner_v & 0xffff;
+    const unsigned inner2_v = inner_v >> 16;
     for (y = vstep; y < h4; y += vstep) {
-        if (inner1) masks[1][by4 + y][thl4c][0] |= inner1;
-        if (inner2) masks[1][by4 + y][thl4c][1] |= inner2;
+        if (inner1_v) masks[1][by4 + y][thl4c][0] |= inner1_v;
+        if (inner2_v) masks[1][by4 + y][thl4c][1] |= inner2_v;
     }
 
     dav1d_memset_likely_pow2(a, thl4c, w4);
@@ -240,8 +240,8 @@ static void mask_edges_chroma(uint16_t (*const masks)[32][2][2],
         // inner (tx) left|right edges
         const int hstep = t_dim->w;
         unsigned t = 1U << cby4;
-        unsigned inner = (unsigned) ((((uint64_t) t) << ch4) - t);
-        unsigned inner1 = inner & ((1 << vmask) - 1), inner2 = inner >> vmask;
+        const unsigned inner = (unsigned) ((((uint64_t) t) << ch4) - t);
+        const unsigned inner1 = inner & ((1 << vmask) - 1), inner2 = inner >> vmask;
         for (x = hstep; x < cw4; x += hstep) {
             if (inner1) masks[0][cbx4 + x][twl4c][0] |= inner1;
             if (inner2) masks[0][cbx4 + x][twl4c][1] |= inner2;
@@ -252,11 +252,11 @@ static void mask_edges_chroma(uint16_t (*const masks)[32][2][2],
         //           bottom
         const int vstep = t_dim->h;
         t = 1U << cbx4;
-        inner = (unsigned) ((((uint64_t) t) << cw4) - t);
-        inner1 = inner & ((1 << hmask) - 1), inner2 = inner >> hmask;
+        const unsigned inner_v = (unsigned) ((((uint64_t) t) << cw4) - t);
+        const unsigned inner1_v = inner_v & ((1 << hmask) - 1), inner2_v = inner_v >> hmask;
         for (y = vstep; y < ch4; y += vstep) {
-            if (inner1) masks[1][cby4 + y][thl4c][0] |= inner1;
-            if (inner2) masks[1][cby4 + y][thl4c][1] |= inner2;
+            if (inner1_v) masks[1][cby4 + y][thl4c][0] |= inner1_v;
+            if (inner2_v) masks[1][cby4 + y][thl4c][1] |= inner2_v;
         }
     }
 
@@ -422,11 +422,11 @@ static void calc_lf_value(uint8_t (*const lflvl_values)[2],
         lflvl_values[0][0] = lflvl_values[0][1] =
             iclip(base + (mr_delta->ref_delta[0] * (1 << sh)), 0, 63);
         for (int r = 1; r < 8; r++) {
-            for (int m = 0; m < 2; m++) {
-                const int delta =
-                    mr_delta->mode_delta[m] + mr_delta->ref_delta[r];
-                lflvl_values[r][m] = iclip(base + (delta * (1 << sh)), 0, 63);
-            }
+            const int ref_delta = mr_delta->ref_delta[r];
+            const int mode_delta_0 = mr_delta->mode_delta[0];
+            const int mode_delta_1 = mr_delta->mode_delta[1];
+            lflvl_values[r][0] = iclip(base + ((mode_delta_0 + ref_delta) * (1 << sh)), 0, 63);
+            lflvl_values[r][1] = iclip(base + ((mode_delta_1 + ref_delta) * (1 << sh)), 0, 63);
         }
     }
 }
@@ -459,18 +459,22 @@ void dav1d_calc_lf_values(uint8_t (*const lflvl_values)[4][8][2],
     for (int s = 0; s < n_seg; s++) {
         const Dav1dSegmentationData *const segd =
             hdr->segmentation.enabled ? &hdr->segmentation.seg_data.d[s] : NULL;
+        const int lf_y_v_delta = segd ? segd->delta_lf_y_v : 0;
+        const int lf_y_h_delta = segd ? segd->delta_lf_y_h : 0;
+        const int lf_u_delta = segd ? segd->delta_lf_u : 0;
+        const int lf_v_delta = segd ? segd->delta_lf_v : 0;
 
         calc_lf_value(lflvl_values[s][0], hdr->loopfilter.level_y[0],
-                      lf_delta[0], segd ? segd->delta_lf_y_v : 0, mr_deltas);
+                      lf_delta[0], lf_y_v_delta, mr_deltas);
         calc_lf_value(lflvl_values[s][1], hdr->loopfilter.level_y[1],
                       lf_delta[hdr->delta.lf.multi ? 1 : 0],
-                      segd ? segd->delta_lf_y_h : 0, mr_deltas);
+                      lf_y_h_delta, mr_deltas);
         calc_lf_value_chroma(lflvl_values[s][2], hdr->loopfilter.level_u,
                              lf_delta[hdr->delta.lf.multi ? 2 : 0],
-                             segd ? segd->delta_lf_u : 0, mr_deltas);
+                             lf_u_delta, mr_deltas);
         calc_lf_value_chroma(lflvl_values[s][3], hdr->loopfilter.level_v,
                              lf_delta[hdr->delta.lf.multi ? 3 : 0],
-                             segd ? segd->delta_lf_v : 0, mr_deltas);
+                             lf_v_delta, mr_deltas);
     }
 }
 
