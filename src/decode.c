@@ -2799,8 +2799,8 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
     int retval = DAV1D_ERR(ENOMEM);
 
     if (f->sbh > f->lf.start_of_tile_row_sz) {
-        dav1d_free(f->lf.start_of_tile_row);
-        f->lf.start_of_tile_row = dav1d_malloc(ALLOC_TILE, f->sbh * sizeof(uint8_t));
+        dav1d_free_aligned(f->lf.start_of_tile_row);
+        f->lf.start_of_tile_row = dav1d_alloc_aligned(ALLOC_TILE, f->sbh * sizeof(uint8_t), 64);
         if (!f->lf.start_of_tile_row) {
             f->lf.start_of_tile_row_sz = 0;
             goto error;
@@ -2817,9 +2817,9 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
     const int n_ts = f->frame_hdr->tiling.cols * f->frame_hdr->tiling.rows;
     if (n_ts != f->n_ts) {
         if (c->n_fc > 1) {
-            dav1d_free(f->frame_thread.tile_start_off);
+            dav1d_free_aligned(f->frame_thread.tile_start_off);
             f->frame_thread.tile_start_off =
-                dav1d_malloc(ALLOC_TILE, sizeof(*f->frame_thread.tile_start_off) * n_ts);
+                dav1d_alloc_aligned(ALLOC_TILE, sizeof(*f->frame_thread.tile_start_off) * n_ts, 64);
             if (!f->frame_thread.tile_start_off) {
                 f->n_ts = 0;
                 goto error;
@@ -2836,8 +2836,8 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
 
     const int a_sz = f->sb128w * f->frame_hdr->tiling.rows * (1 + (c->n_fc > 1 && c->n_tc > 1));
     if (a_sz != f->a_sz) {
-        dav1d_free(f->a);
-        f->a = dav1d_malloc(ALLOC_TILE, sizeof(*f->a) * a_sz);
+        dav1d_free_aligned(f->a);
+        f->a = dav1d_alloc_aligned(ALLOC_TILE, sizeof(*f->a) * a_sz, 64);
         if (!f->a) {
             f->a_sz = 0;
             goto error;
@@ -2864,10 +2864,10 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
 
         const int lowest_pixel_mem_sz = f->frame_hdr->tiling.cols * f->sbh;
         if (lowest_pixel_mem_sz != f->tile_thread.lowest_pixel_mem_sz) {
-            dav1d_free(f->tile_thread.lowest_pixel_mem);
+            dav1d_free_aligned(f->tile_thread.lowest_pixel_mem);
             f->tile_thread.lowest_pixel_mem =
-                dav1d_malloc(ALLOC_TILE, lowest_pixel_mem_sz *
-                             sizeof(*f->tile_thread.lowest_pixel_mem));
+                dav1d_alloc_aligned(ALLOC_TILE, lowest_pixel_mem_sz *
+                             sizeof(*f->tile_thread.lowest_pixel_mem), 64);
             if (!f->tile_thread.lowest_pixel_mem) {
                 f->tile_thread.lowest_pixel_mem_sz = 0;
                 goto error;
@@ -3044,9 +3044,9 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
 
     // update allocation for loopfilter masks
     if (num_sb128 != f->lf.mask_sz) {
-        dav1d_free(f->lf.mask);
+        dav1d_free_aligned(f->lf.mask);
         dav1d_free_aligned(f->lf.level[0]);
-        f->lf.mask = dav1d_malloc(ALLOC_LF, sizeof(*f->lf.mask) * num_sb128);
+        f->lf.mask = dav1d_alloc_aligned(ALLOC_LF, sizeof(*f->lf.mask) * num_sb128, 64);
         // over-allocate by 3 bytes since some of the SIMD implementations
         // index these from the level type and can thus over-read by up to 3
         size_t level_bytes = sizeof(*f->lf.level[0]) * num_sb128 * 32 * 32;
@@ -3057,9 +3057,9 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
         }
         f->lf.level[1] = (void*)((uint8_t*)f->lf.level[0] + level_bytes);
         if (c->n_fc > 1) {
-            dav1d_free(f->frame_thread.b);
-            f->frame_thread.b = dav1d_malloc(ALLOC_BLOCK, sizeof(*f->frame_thread.b) *
-                                             num_sb128 * 32 * 32);
+            dav1d_free_aligned(f->frame_thread.b);
+            f->frame_thread.b = dav1d_alloc_aligned(ALLOC_BLOCK, sizeof(*f->frame_thread.b) *
+                                             num_sb128 * 32 * 32, 64);
             if (!f->frame_thread.b) {
                 f->lf.mask_sz = 0;
                 goto error;
@@ -3071,8 +3071,8 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
     f->sr_sb128w = (f->sr_cur.p.p.w + 127) >> 7;
     const int lr_mask_sz = f->sr_sb128w * f->sb128h;
     if (lr_mask_sz != f->lf.lr_mask_sz) {
-        dav1d_free(f->lf.lr_mask);
-        f->lf.lr_mask = dav1d_malloc(ALLOC_LR, sizeof(*f->lf.lr_mask) * lr_mask_sz);
+        dav1d_free_aligned(f->lf.lr_mask);
+        f->lf.lr_mask = dav1d_alloc_aligned(ALLOC_LR, sizeof(*f->lf.lr_mask) * lr_mask_sz, 64);
         if (!f->lf.lr_mask) {
             f->lf.lr_mask_sz = 0;
             goto error;
@@ -3106,8 +3106,8 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {
 
     const int re_sz = f->sb128h * f->frame_hdr->tiling.cols;
     if (re_sz != f->lf.re_sz) {
-        dav1d_free(f->lf.tx_lpf_right_edge[0]);
-        f->lf.tx_lpf_right_edge[0] = dav1d_malloc(ALLOC_LF, re_sz * 32 * 2);
+        dav1d_free_aligned(f->lf.tx_lpf_right_edge[0]);
+        f->lf.tx_lpf_right_edge[0] = dav1d_alloc_aligned(ALLOC_LF, re_sz * 32 * 2, 64);
         if (!f->lf.tx_lpf_right_edge[0]) {
             f->lf.re_sz = 0;
             goto error;
@@ -3554,9 +3554,9 @@ int dav1d_submit_frame(Dav1dContext *const c) {
 
     // FIXME qsort so tiles are in order (for frame threading)
     if (f->n_tile_data_alloc < c->n_tile_data) {
-        dav1d_free(f->tile);
+        dav1d_free_aligned(f->tile);
         assert(c->n_tile_data < INT_MAX / (int)sizeof(*f->tile));
-        f->tile = dav1d_malloc(ALLOC_TILE, c->n_tile_data * sizeof(*f->tile));
+        f->tile = dav1d_alloc_aligned(ALLOC_TILE, c->n_tile_data * sizeof(*f->tile), 64);
         if (!f->tile) {
             f->n_tile_data_alloc = f->n_tile_data = 0;
             res = DAV1D_ERR(ENOMEM);
