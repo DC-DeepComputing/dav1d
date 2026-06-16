@@ -1,5 +1,16 @@
 # General options
 
+option('enable_autofdo',
+    type: 'combo',
+    choices: ['true', 'false', 'if-release'],
+    value: 'if-release',
+    description: 'Enable AutoFDO optimizations')
+
+option('pgo_generate',
+    type: 'boolean',
+    value: false,
+    description: 'Enable PGO profile generation')
+
 option('bitdepths',
     type: 'array',
     choices: ['8', '16'],

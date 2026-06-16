@@ -307,6 +307,39 @@ else
     ]
 endif
 
+if get_option('pgo_generate')
+    if cc.get_id() == 'clang'
+        if cc.has_argument('-fprofile-instr-generate')
+            add_project_arguments('-fprofile-instr-generate', language: 'c')
+            add_project_link_arguments('-fprofile-instr-generate', language: 'c')
+        else
+            error('Clang does not support -fprofile-instr-generate')
+        endif
+    elif cc.get_id() == 'gcc'
+        if cc.has_argument('-fprofile-generate')
+            add_project_arguments('-fprofile-generate', language: 'c')
+            add_project_link_arguments('-fprofile-generate', language: 'c')
+        else
+            error('GCC does not support -fprofile-generate')
+        endif
+    else
+        error('Compiler not supported for PGO')
+    endif
+endif
+
+autofdo = get_option('enable_autofdo')
+if autofdo == 'true' or (autofdo == 'if-release' and get_option('buildtype') == 'release')
+    if cc.get_id() == 'clang'
+        if cc.has_argument('-fauto-profile=default.profraw')
+            optional_arguments += '-fauto-profile=default.profraw'
+        endif
+    elif cc.get_id() == 'gcc'
+        if cc.has_argument('-fprofile-use')
+            optional_arguments += '-fprofile-use'
+        endif
+    endif
+endif
+
 if (get_option('buildtype') != 'debug' and get_option('buildtype') != 'plain')
     optional_arguments += '-fomit-frame-pointer'
     optional_arguments += '-ffast-math'
