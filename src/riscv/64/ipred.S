@@ -168,14 +168,52 @@ function ipred_v_8bpc_rvv, export=1, ext="v,zba"
     ret
 endfunc
 
-function ipred_h_8bpc_rvv, export=1, ext="v,zba"
-
-    lw a7, -4(a2)
-    vsetvli a6, a3, e8, m1, ta, ma
+function ipred_h_vl1024_8bpc_rvv, export=1, ext="v,zbb"
+    srli  a6, a3, 5   # 0, 0, 0, 1, 2 (width >> 5)
     li a5, 4
-    beq a5, a4, 4f
-    bgt a3, a6, 2f
-1:
+    addi a6, a6, 0xC5 # MF8 + (width >> 5)
+    lw a7, -4(a2)
+    vsetvl zero, a3, a6
+    beq a4, a5, L(ipred_h_w4)
+    j L(ipred_h_epilog)
+endfunc
+
+function ipred_h_vl512_8bpc_rvv, export=1, ext="v,zbb"
+    srli  a6, a3, 3   # 0, 1, 2, 4, 8 (width >> 3)
+    ctz  a6, a6       # 64, 0, 1, 2, 3
+    li a5, 4
+    addi a6, a6, 5    # 69, 5, 6, 7, 8
+    lw a7, -4(a2)
+    andi a6, a6, 7    # 5, 5, 6, 7, 0
+    ori  a6, a6, MA | TA | E8
+    vsetvl zero, a3, a6
+    beq a4, a5, L(ipred_h_w4)
+    j L(ipred_h_epilog)
+
+endfunc
+
+function ipred_h_vl256_8bpc_rvv, export=1, ext="v,zbb"
+    ctz  a6, a3 # 2, 3, 4, 5 ,6
+    li a5, 4
+    addi a6, a6, 0xC3 # 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA
+    lw a7, -4(a2)
+    andi a6, a6, 0xF7 # 0xC5, 0xC6, 0xC7, 0xC0, 0xC1, 0xC2
+    vsetvl zero, a3, a6
+    beq a4, a5, L(ipred_h_w4)
+    j L(ipred_h_epilog)
+endfunc
+
+function ipred_h_vl128_8bpc_rvv, export=1, ext="v,zba,zbb"
+
+    ctz  a6, a3
+    lw a7, -4(a2)
+    xori a6, a6, 0b100
+    li a5, 4
+    ori  a6, a6, MA | TA | E8
+    vsetvl zero, a3, a6
+    beq a4, a5, L(ipred_h_w4)
+
+L(ipred_h_epilog):
     srli a6, a7, 8
     vmv.v.x v4, a7
     lw a7, -8(a2)
@@ -193,7 +231,7 @@ function ipred_h_8bpc_rvv, export=1, ext="v,zba"
     addi a4, a4, 8
     srli a3, a7, 24
 
-3:
+1:
     vse8.v v4, (t3)
     vmv.v.x v4, a7
 
@@ -216,7 +254,7 @@ function ipred_h_8bpc_rvv, export=1, ext="v,zba"
     srli a3, a7, 24
     sh2add a0, a1, a0
 
-    bge a2, a4, 3b
+    bge a2, a4, 1b
 
     vse8.v v4, (t3)
     vse8.v v8, (t2)
@@ -225,7 +263,7 @@ function ipred_h_8bpc_rvv, export=1, ext="v,zba"
 
     ret
 
-4:
+L(ipred_h_w4):
     srli a6, a7, 8
 
     vmv.v.x v4, a7
@@ -244,13 +282,6 @@ function ipred_h_8bpc_rvv, export=1, ext="v,zba"
     vse8.v v16, (a0)
 
     ret
-2:
-    vsetvli a6, a3, e8, m2, ta, ma
-    ble a3, a6, 1b
-
-    vsetvli a6, a3, e8, m4, ta, ma
-    j 1b
-
 endfunc
 
 function dc_gen_8bpc_rvv, export=1, ext="v,zbb"
