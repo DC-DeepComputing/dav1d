@@ -248,9 +248,24 @@ function generate_grain_y_8bpc_rvv, export=1, ext="v,zba,zbb"
 15:
     ret
 endfunc
+
+function generate_grain_uv_420_8bpc_rvv, export=1, ext="v,zba,zbb"
+    li a4, 1
+    li a5, 1
+    j .Lgenerate_grain_uv_core
+endfunc
+
+function generate_grain_uv_422_8bpc_rvv, export=1, ext="v,zba,zbb"
+    li a4, 1
+    li a5, 0
+    j .Lgenerate_grain_uv_core
+endfunc
+
 function generate_grain_uv_444_8bpc_rvv, export=1, ext="v,zba,zbb"
     li a4, 0
     li a5, 0
+.Lgenerate_grain_uv_core:
+
     addi sp, sp, -48
     sd s1, 0(sp)
     sd s2, 8(sp)

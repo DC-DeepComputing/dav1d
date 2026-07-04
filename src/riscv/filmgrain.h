@@ -32,6 +32,9 @@
 #include "src/filmgrain.h"
 
 decl_generate_grain_y_fn(BF(dav1d_generate_grain_y, rvv));
+decl_generate_grain_uv_fn(BF(dav1d_generate_grain_uv_420, rvv));
+decl_generate_grain_uv_fn(BF(dav1d_generate_grain_uv_422, rvv));
+decl_generate_grain_uv_fn(BF(dav1d_generate_grain_uv_444, rvv));
 
 static ALWAYS_INLINE void film_grain_dsp_init_riscv(Dav1dFilmGrainDSPContext *const c){
     const unsigned flags = dav1d_get_cpu_flags();
@@ -40,6 +43,9 @@ static ALWAYS_INLINE void film_grain_dsp_init_riscv(Dav1dFilmGrainDSPContext *co
 
 #if BITDEPTH == 8
     c->generate_grain_y = dav1d_generate_grain_y_8bpc_rvv;
+    c->generate_grain_uv[DAV1D_PIXEL_LAYOUT_I420 - 1] = dav1d_generate_grain_uv_420_8bpc_rvv;
+    c->generate_grain_uv[DAV1D_PIXEL_LAYOUT_I422 - 1] = dav1d_generate_grain_uv_422_8bpc_rvv;
+    c->generate_grain_uv[DAV1D_PIXEL_LAYOUT_I444 - 1] = dav1d_generate_grain_uv_444_8bpc_rvv;
 #elif BITDEPTH == 16
     c->generate_grain_y = dav1d_generate_grain_y_16bpc_rvv;
 #endif
