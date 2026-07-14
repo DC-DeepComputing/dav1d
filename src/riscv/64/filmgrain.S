@@ -398,9 +398,86 @@ function generate_grain_uv_444_8bpc_rvv, export=1, ext="v,zba,zbb"
     mv  t0, sp
 5:
     vsetvli a1, a4, e8,  m2, ta, ma
-    vsetvli zero, zero, e32, m8, ta, ma
-    vmv.v.i v24, 0
 
+    lw a5, 4(s2)
+    beqz a5, 90f
+
+    // Compute lumaY = ((y - 3) << suby) + 3
+    addi a5, t4, -3
+    sll  a5, a5, s4
+    addi a5, a5, 3
+
+    // lumaBase = buf_y + lumaY * 82
+    li   a7, 82
+    mul  a5, a5, a7
+    add  a5, a5, s1
+
+    // lumaX = ((x - 3) << subx) + 3
+    addi a7, t6, -3
+    sll  a7, a7, s3
+    addi a7, a7, 3
+    add  a7, a7, a5
+
+    // stride = 1 << subx
+    li   a3, 1
+    sll  a3, a3, s3
+
+    vsetvli zero, a1, e8, m2, ta, ma
+    vlse8.v v16, (a7), a3
+
+    vsetvli zero, a1, e16, m4, ta, ma
+    vsext.vf2 v8, v16
+
+    beqz s3, 91f
+    addi a5, a7, 1
+    vsetvli zero, a1, e8, m2, ta, ma
+    vlse8.v v16, (a5), a3
+    vsetvli zero, a1, e16, m4, ta, ma
+    vsext.vf2 v12, v16
+    vadd.vv v8, v8, v12
+91:
+    beqz s4, 92f
+    addi a5, a7, 82
+    vsetvli zero, a1, e8, m2, ta, ma
+    vlse8.v v16, (a5), a3
+    vsetvli zero, a1, e16, m4, ta, ma
+    vsext.vf2 v12, v16
+    vadd.vv v8, v8, v12
+
+    beqz s3, 92f
+    addi a5, a7, 83
+    vsetvli zero, a1, e8, m2, ta, ma
+    vlse8.v v16, (a5), a3
+    vsetvli zero, a1, e16, m4, ta, ma
+    vsext.vf2 v12, v16
+    vadd.vv v8, v8, v12
+92:
+    add a5, s3, s4
+    beqz a5, 93f
+
+    addi a7, a5, -1
+    li   t5, 1
+    sll  t5, t5, a7
+    vadd.vx v8, v8, t5
+    vsra.vx v8, v8, a5
+93:
+    // coeff
+    lb   a5, FGD_AR_COEFF_LAG(s2)
+    li   a7, 2
+    mul  a7, a7, a5
+    addi a7, a7, 2
+    mul  a7, a7, a5
+    add  a7, a7, t3
+    lb   a7, 0(a7)
+
+    vsetvli zero, a1, e16, m4, ta, ma
+    vwmul.vx v24, v8, a7
+
+    j 94f
+90:
+    vsetvli zero, a1, e32, m8, ta, ma
+    vmv.v.i v24, 0
+94:
     sub a7, zero, t1
     mv  a6, t3
 
@@ -485,49 +562,6 @@ function generate_grain_uv_444_8bpc_rvv, export=1, ext="v,zba,zbb"
     addi a7, a7, 1
     j    11b
 12:
-    // FGD_NUM_Y_POINTS
-
-    lw t5, 4(s2)
-    beqz t5, 88f
-
-    addi t5, a4, -3
-    sll t5, t5, s3
-    addi t5, t5, 3
-
-    addi t6, t4, -3
-    sll t6, t6, s4
-    addi t6, t6, 3
-
-    mul t6, t6, a2
-    add t6, t6, t5
-    add t6, t6, s1
-
-    lb t5, 0(t6)
-
-    beqz s3, 33f
-    lb a7, 1(t6)
-    add t5, t5, a7
-33:
-    beqz s4, 44f
-    lb a7, 82(t6)
-    add t5, t5, a7
-    beqz s3, 44f
-    lb a7, 83(t6)
-    add t5, t5, a7
-44:
-    add a7, s3, s4
-    beqz a7, 55f
-
-    addi t1, a7, -1
-    li a1, 1
-    sll t1, a1, t1
-    add t5, t5, t1
-    sra t5, t5, a7
-55:
-    lb t6, 0(a6)
-    mul t5, t5, t6
-    add a5, a5, t5
-88:
     li   a1, 1
     sll  a1, a1, t2
     srai a1, a1, 1
