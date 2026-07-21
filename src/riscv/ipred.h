@@ -76,6 +76,10 @@ static ALWAYS_INLINE void intra_pred_dsp_init_riscv(Dav1dIntraPredDSPContext *co
     c->cfl_pred[TOP_DC_PRED ] = dav1d_ipred_cfl_top_16bpc_rvv;
     c->cfl_pred[LEFT_DC_PRED] = dav1d_ipred_cfl_left_16bpc_rvv;
 
+    c->intra_pred[DC_PRED      ] = dav1d_ipred_dc_16bpc_rvv;
+    c->intra_pred[DC_128_PRED  ] = dav1d_ipred_dc_128_16bpc_rvv;
+    c->intra_pred[TOP_DC_PRED  ] = dav1d_ipred_dc_top_16bpc_rvv;
+    c->intra_pred[LEFT_DC_PRED ] = dav1d_ipred_dc_left_16bpc_rvv;
     c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_16bpc_rvv;
     c->intra_pred[VERT_PRED    ] = dav1d_ipred_v_16bpc_rvv;
     c->intra_pred[PAETH_PRED   ] = dav1d_ipred_paeth_16bpc_rvv;

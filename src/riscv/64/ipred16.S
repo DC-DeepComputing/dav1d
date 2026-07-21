@@ -618,3 +618,75 @@ function pal_pred_16bpc_rvv, export=1, ext="v,zba"
     bnez a5, 1b
     ret
 endfunc
+
+function dc_common_16bpc_rvv, export=1, ext="v,zba"
+    vsetvli t0, a3, e16, m1, ta, ma
+    beq t0, a3, 1f
+    vsetvli t0, a3, e16, m2, ta, ma
+    beq t0, a3, 1f
+    vsetvli t0, a3, e16, m4, ta, ma
+    beq t0, a3, 1f
+    vsetvli t0, a3, e16, m8, ta, ma
+1:
+    vmv.v.x v0, a5
+
+2:
+    add t1, a0, a1
+    vse16.v v0, (a0)
+    add t2, t1, a1
+    vse16.v v0, (t1)
+    add t3, t2, a1
+    vse16.v v0, (t2)
+    vse16.v v0, (t3)
+
+    sh2add a0, a1, a0
+
+    addi a4, a4, -4
+    bnez a4, 2b
+
+    ret
+endfunc
+
+function ipred_dc_128_16bpc_rvv, export=1, ext="v,zba"
+    ld a5, 0(sp)
+    addi a5, a5, 1
+    srai a5, a5, 1
+    j dc_common_16bpc_rvv
+endfunc
+
+function ipred_dc_16bpc_rvv, export=1, ext="v,zba,zbb"
+    mv t6, a0
+    mv a0, a2
+    mv t4, a1
+    mv a1, a3
+    mv a2, a4
+    jal t0, dc_gen_16bpc_rvv
+    mv a5, a0
+    mv a0, t6
+    mv a1, t4
+    j dc_common_16bpc_rvv
+endfunc
+
+function ipred_dc_left_16bpc_rvv, export=1, ext="v,zba,zbb"
+    mv t6, a0
+    mv a0, a2
+    mv t4, a1
+    mv a1, a4
+    jal t0, dc_gen_left_16bpc_rvv
+    mv a5, a0
+    mv a0, t6
+    mv a1, t4
+    j dc_common_16bpc_rvv
+endfunc
+
+function ipred_dc_top_16bpc_rvv, export=1, ext="v,zba,zbb"
+    mv t6, a0
+    mv a0, a2
+    mv t4, a1
+    mv a1, a3
+    jal t0, dc_gen_top_16bpc_rvv
+    mv a5, a0
+    mv a0, t6
+    mv a1, t4
+    j dc_common_16bpc_rvv
+endfunc
