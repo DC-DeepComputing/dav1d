@@ -75,6 +75,20 @@ void (name)(pixel *dst, ptrdiff_t dst_stride, \
             HIGHBD_DECL_SUFFIX)
 typedef decl_avg_fn(*avg_fn);
 
+/* Fused full-pel compound average: writes the COMP_INTER_AVG prediction
+ * straight from the two reference planes, skipping the two int16 scratch
+ * buffers. Valid only when both motion vectors are full-pel for this plane,
+ * neither reference is scaled, and neither needs edge emulation -- in which
+ * case prep() is src<<intermediate_bits (minus PREP_BIAS) and avg() is
+ * (tmp1+tmp2+rnd)>>sh, whose composition is exactly (a+b+1)>>1 at every
+ * supported bit depth. */
+#define decl_avg_direct_fn(name) \
+void (name)(pixel *dst, ptrdiff_t dst_stride, \
+            const pixel *src1, ptrdiff_t src1_stride, \
+            const pixel *src2, ptrdiff_t src2_stride, int w, int h \
+            HIGHBD_DECL_SUFFIX)
+typedef decl_avg_direct_fn(*avg_direct_fn);
+
 #define decl_w_avg_fn(name) \
 void (name)(pixel *dst, ptrdiff_t dst_stride, \
             const int16_t *tmp1, const int16_t *tmp2, int w, int h, int weight \
@@ -149,6 +163,7 @@ typedef struct Dav1dMCDSPContext {
     mct_fn mct[N_2D_FILTERS];
     mct_scaled_fn mct_scaled[N_2D_FILTERS];
     avg_fn avg;
+    avg_direct_fn avg_direct;
     w_avg_fn w_avg;
     mask_fn mask;
     w_mask_fn w_mask[3 /* 444, 422, 420 */];

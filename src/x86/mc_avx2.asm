@@ -5266,6 +5266,116 @@ cglobal avg_8bpc, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
     add                  wq, r6
     BIDIR_FN            AVG
 
+; ---------------------------------------------------------------------------
+; avg_direct: fused full-pel COMP_INTER_AVG.
+;
+; prep() for a full-pel MV is tmp = src << intermediate_bits, and avg() is
+; (tmp1 + tmp2 + (1 << intermediate_bits)) >> (intermediate_bits + 1), so the
+; composition is exactly (a + b + 1) >> 1 -- one pavgb, no int16 scratch.
+;
+; void dav1d_avg_direct_8bpc_avx2(pixel *dst, ptrdiff_t dst_stride,
+;                                 const pixel *src1, ptrdiff_t src1_stride,
+;                                 const pixel *src2, ptrdiff_t src2_stride,
+;                                 int w, int h);
+; ---------------------------------------------------------------------------
+cglobal avg_direct_8bpc, 8, 9, 2, dst, ds, src1, s1s, src2, s2s, w, h
+    movifnidn            wd, wm
+    movifnidn            hd, hm
+    cmp                  wd, 16
+    jg .w32plus
+    je .w16
+    cmp                  wd, 8
+    je .w8
+.w4_loop:
+    movd                xm0, [src1q]
+    movd                xm1, [src2q]
+    pavgb               xm0, xm1
+    movd             [dstq], xm0
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w4_loop
+    RET
+.w8_loop:
+    lea               src1q, [src1q+s1sq*2]
+    lea               src2q, [src2q+s2sq*2]
+    lea                dstq, [dstq+dsq*2]
+.w8:
+    movq                xm0, [src1q]
+    movhps              xm0, [src1q+s1sq]
+    movq                xm1, [src2q]
+    movhps              xm1, [src2q+s2sq]
+    pavgb               xm0, xm1
+    movq             [dstq], xm0
+    movhps        [dstq+dsq], xm0
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+.w16_loop:
+    lea               src1q, [src1q+s1sq*2]
+    lea               src2q, [src2q+s2sq*2]
+    lea                dstq, [dstq+dsq*2]
+.w16:
+    movu                xm0, [src1q]
+    vinserti128          m0, m0, [src1q+s1sq], 1
+    movu                xm1, [src2q]
+    vinserti128          m1, m1, [src2q+s2sq], 1
+    pavgb                m0, m1
+    movu             [dstq], xm0
+    vextracti128  [dstq+dsq], m0, 1
+    sub                  hd, 2
+    jg .w16_loop
+    RET
+.w32plus:
+    cmp                  wd, 64
+    jg .w128
+    je .w64
+.w32_loop:
+    movu                 m0, [src1q]
+    pavgb                m0, [src2q]
+    movu             [dstq], m0
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w32_loop
+    RET
+.w64_loop:
+    movu                 m0, [src1q+32*0]
+    pavgb                m0, [src2q+32*0]
+    movu        [dstq+32*0], m0
+    movu                 m1, [src1q+32*1]
+    pavgb                m1, [src2q+32*1]
+    movu        [dstq+32*1], m1
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w64_loop
+    RET
+.w64:
+    jmp .w64_loop
+.w128:
+    movu                 m0, [src1q+32*0]
+    pavgb                m0, [src2q+32*0]
+    movu        [dstq+32*0], m0
+    movu                 m1, [src1q+32*1]
+    pavgb                m1, [src2q+32*1]
+    movu        [dstq+32*1], m1
+    movu                 m0, [src1q+32*2]
+    pavgb                m0, [src2q+32*2]
+    movu        [dstq+32*2], m0
+    movu                 m1, [src1q+32*3]
+    pavgb                m1, [src2q+32*3]
+    movu        [dstq+32*3], m1
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w128
+    RET
+
 %macro W_AVG 1 ; src_offset
     ; (a * weight + b * (16 - weight) + 128) >> 8
     ; = ((a - b) * weight + (b << 4) + 128) >> 8

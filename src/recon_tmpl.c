@@ -935,6 +935,43 @@ void bytefn(dav1d_read_coef_blocks)(Dav1dTaskContext *const t,
     }
 }
 
+/* Would mc() take its full-pel, unscaled, no-edge-emulation path for this
+ * plane of this reference? If so, hand back the source pointer it would have
+ * used, so the caller can average the two references in place of
+ * prep()+prep()+avg().
+ *
+ * Every condition below restates mc()'s own for the mx == my == 0 case; the
+ * only deliberate divergence is that intrabc is refused outright instead of
+ * replicating mc()'s alternate picture bounds. Divergences can therefore only
+ * cost a fusion opportunity, never produce an out-of-bounds read. */
+static int mc_direct(const Dav1dFrameContext *const f,
+                     const pixel **const pref, ptrdiff_t *const pref_stride,
+                     const int bw4, const int bh4, const int bx, const int by,
+                     const int pl, const mv mv,
+                     const Dav1dThreadPicture *const refp)
+{
+    const int ss_ver = !!pl && f->cur.p.layout == DAV1D_PIXEL_LAYOUT_I420;
+    const int ss_hor = !!pl && f->cur.p.layout != DAV1D_PIXEL_LAYOUT_I444;
+    const int h_mul = 4 >> ss_hor, v_mul = 4 >> ss_ver;
+
+    if (mv.x & (15 >> !ss_hor)) return 0;               // not full-pel, this plane
+    if (mv.y & (15 >> !ss_ver)) return 0;
+    if (refp->p.p.w != f->cur.p.w || refp->p.p.h != f->cur.p.h) return 0;
+    if (refp->p.data[0] == f->cur.data[0]) return 0;    // intrabc
+
+    const int dx = bx * h_mul + (mv.x >> (3 + ss_hor));
+    const int dy = by * v_mul + (mv.y >> (3 + ss_ver));
+    const int w = (f->cur.p.w + ss_hor) >> ss_hor;
+    const int h = (f->cur.p.h + ss_ver) >> ss_ver;
+    if (dx < 0 || dy < 0 ||
+        dx + bw4 * h_mul > w || dy + bh4 * v_mul > h) return 0;
+
+    const ptrdiff_t ref_stride = refp->p.stride[!!pl];
+    *pref = ((const pixel *) refp->p.data[pl]) + PXSTRIDE(ref_stride) * dy + dx;
+    *pref_stride = ref_stride;
+    return 1;
+}
+
 static int mc(Dav1dTaskContext *const t,
               pixel *const dst8, int16_t *const dst16, const ptrdiff_t dst_stride,
               const int bw4, const int bh4,
@@ -1786,6 +1823,33 @@ int bytefn(dav1d_recon_b_inter)(Dav1dTaskContext *const t, const enum BlockSize 
         uint8_t *const seg_mask = t->scratch.seg_mask;
         const uint8_t *mask;
 
+        /* Fused full-pel path: when both references are full-pel, unscaled
+         * and fully inside the picture, prep()+prep()+avg() collapses to one
+         * (a + b + 1) >> 1 pass straight off the reference planes, which
+         * removes both 128x128 int16 scratch round trips. */
+        /* One cheap OR of the four MV components gates the whole thing: a
+         * block whose MVs are not full-pel pays a single test-and-branch,
+         * which is what keeps the non-fusable majority of streams neutral. */
+        const int mv_or = b->mv[0].x | b->mv[0].y | b->mv[1].x | b->mv[1].y;
+        const int fuse_ok = b->comp_type == COMP_INTER_AVG &&
+            !(b->inter_mode == GLOBALMV_GLOBALMV &&
+              (f->gmv_warp_allowed[b->ref[0]] | f->gmv_warp_allowed[b->ref[1]]));
+        const pixel *dref[2];
+        ptrdiff_t dref_stride[2];
+
+        if (fuse_ok && !(mv_or & 7) &&
+            mc_direct(f, &dref[0], &dref_stride[0], bw4, bh4,
+                      t->bx, t->by, 0, b->mv[0], &f->refp[b->ref[0]]) &&
+            mc_direct(f, &dref[1], &dref_stride[1], bw4, bh4,
+                      t->bx, t->by, 0, b->mv[1], &f->refp[b->ref[1]]))
+        {
+            dsp->mc.avg_direct(dst, f->cur.stride[0],
+                               dref[0], dref_stride[0],
+                               dref[1], dref_stride[1],
+                               bw4 * 4, bh4 * 4 HIGHBD_CALL_SUFFIX);
+            goto comp_luma_done;
+        }
+
         for (int i = 0; i < 2; i++) {
             const Dav1dThreadPicture *const refp = &f->refp[b->ref[i]];
 
@@ -1826,8 +1890,23 @@ int bytefn(dav1d_recon_b_inter)(Dav1dTaskContext *const t, const enum BlockSize 
             break;
         }
 
+    comp_luma_done:
         // chroma
         if (has_chroma) for (int pl = 0; pl < 2; pl++) {
+            if (fuse_ok && !(mv_or & (15 >> !ss_hor)) &&
+                mc_direct(f, &dref[0], &dref_stride[0], bw4, bh4,
+                          t->bx, t->by, 1 + pl, b->mv[0], &f->refp[b->ref[0]]) &&
+                mc_direct(f, &dref[1], &dref_stride[1], bw4, bh4,
+                          t->bx, t->by, 1 + pl, b->mv[1], &f->refp[b->ref[1]]))
+            {
+                dsp->mc.avg_direct(((pixel *) f->cur.data[1 + pl]) + uvdstoff,
+                                   f->cur.stride[1],
+                                   dref[0], dref_stride[0],
+                                   dref[1], dref_stride[1],
+                                   bw4 * 4 >> ss_hor, bh4 * 4 >> ss_ver
+                                   HIGHBD_CALL_SUFFIX);
+                continue;
+            }
             for (int i = 0; i < 2; i++) {
                 const Dav1dThreadPicture *const refp = &f->refp[b->ref[i]];
                 if (b->inter_mode == GLOBALMV_GLOBALMV &&

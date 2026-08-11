@@ -5488,6 +5488,137 @@ DECLARE_REG_TMP 5
 DECLARE_REG_TMP 7
 %endif
 
+; ---------------------------------------------------------------------------
+; avg_direct: fused full-pel COMP_INTER_AVG.
+;
+; prep() for a full-pel MV is tmp = src << intermediate_bits, and avg() is
+; (tmp1 + tmp2 + (1 << intermediate_bits)) >> (intermediate_bits + 1), so the
+; composition is exactly (a + b + 1) >> 1 -- one pavgw, no int16 scratch.
+;
+; void dav1d_avg_direct_16bpc_avx2(pixel *dst, ptrdiff_t dst_stride,
+;                                 const pixel *src1, ptrdiff_t src1_stride,
+;                                 const pixel *src2, ptrdiff_t src2_stride,
+;                                 int w, int h);
+; ---------------------------------------------------------------------------
+cglobal avg_direct_16bpc, 8, 9, 2, dst, ds, src1, s1s, src2, s2s, w, h
+    movifnidn            wd, wm
+    movifnidn            hd, hm
+    cmp                  wd, 16
+    jg .w32plus
+    je .w16
+    cmp                  wd, 8
+    je .w8
+.w4_loop:
+    movq                xm0, [src1q]
+    movq                xm1, [src2q]
+    pavgw               xm0, xm1
+    movq             [dstq], xm0
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w4_loop
+    RET
+.w8_loop:
+    lea               src1q, [src1q+s1sq*2]
+    lea               src2q, [src2q+s2sq*2]
+    lea                dstq, [dstq+dsq*2]
+.w8:
+    movu                xm0, [src1q]
+    movu                xm1, [src2q]
+    pavgw               xm0, xm1
+    movu             [dstq], xm0
+    movu                xm0, [src1q+s1sq]
+    movu                xm1, [src2q+s2sq]
+    pavgw               xm0, xm1
+    movu        [dstq+dsq], xm0
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+.w16_loop:
+    lea               src1q, [src1q+s1sq*2]
+    lea               src2q, [src2q+s2sq*2]
+    lea                dstq, [dstq+dsq*2]
+.w16:
+    movu                 m0, [src1q]
+    pavgw                m0, [src2q]
+    movu             [dstq], m0
+    movu                 m0, [src1q+s1sq]
+    pavgw                m0, [src2q+s2sq]
+    movu        [dstq+dsq], m0
+    sub                  hd, 2
+    jg .w16_loop
+    RET
+.w32plus:
+    cmp                  wd, 64
+    jg .w128
+    je .w64
+.w32_loop:
+    movu                 m0, [src1q+32*0]
+    pavgw                m0, [src2q+32*0]
+    movu        [dstq+32*0], m0
+    movu                 m1, [src1q+32*1]
+    pavgw                m1, [src2q+32*1]
+    movu        [dstq+32*1], m1
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w32_loop
+    RET
+.w64_loop:
+    movu                 m0, [src1q+32*0]
+    pavgw                m0, [src2q+32*0]
+    movu        [dstq+32*0], m0
+    movu                 m0, [src1q+32*1]
+    pavgw                m0, [src2q+32*1]
+    movu        [dstq+32*1], m0
+    movu                 m0, [src1q+32*2]
+    pavgw                m0, [src2q+32*2]
+    movu        [dstq+32*2], m0
+    movu                 m0, [src1q+32*3]
+    pavgw                m0, [src2q+32*3]
+    movu        [dstq+32*3], m0
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w64_loop
+    RET
+.w64:
+    jmp .w64_loop
+.w128:
+    movu                 m0, [src1q+32*0]
+    pavgw                m0, [src2q+32*0]
+    movu        [dstq+32*0], m0
+    movu                 m0, [src1q+32*1]
+    pavgw                m0, [src2q+32*1]
+    movu        [dstq+32*1], m0
+    movu                 m0, [src1q+32*2]
+    pavgw                m0, [src2q+32*2]
+    movu        [dstq+32*2], m0
+    movu                 m0, [src1q+32*3]
+    pavgw                m0, [src2q+32*3]
+    movu        [dstq+32*3], m0
+    movu                 m0, [src1q+32*4]
+    pavgw                m0, [src2q+32*4]
+    movu        [dstq+32*4], m0
+    movu                 m0, [src1q+32*5]
+    pavgw                m0, [src2q+32*5]
+    movu        [dstq+32*5], m0
+    movu                 m0, [src1q+32*6]
+    pavgw                m0, [src2q+32*6]
+    movu        [dstq+32*6], m0
+    movu                 m0, [src1q+32*7]
+    pavgw                m0, [src2q+32*7]
+    movu        [dstq+32*7], m0
+    add               src1q, s1sq
+    add               src2q, s2sq
+    add                dstq, dsq
+    dec                  hd
+    jg .w128
+    RET
+
 cglobal avg_16bpc, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
 %define base r6-avg_avx2_table
     lea                  r6, [avg_avx2_table]

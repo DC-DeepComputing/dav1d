@@ -320,6 +320,52 @@ static void check_avg(Dav1dMCDSPContext *const c) {
     report("avg");
 }
 
+static void check_avg_direct(Dav1dMCDSPContext *const c) {
+    PIXEL_RECT(c_dst, 135, 135);
+    PIXEL_RECT(a_dst, 128, 128);
+    ALIGN_STK_64(pixel, src, 2, [135 * 135]);
+
+    declare_func(void, pixel *dst, ptrdiff_t dst_stride,
+                 const pixel *src1, ptrdiff_t src1_stride,
+                 const pixel *src2, ptrdiff_t src2_stride, int w, int h
+                 HIGHBD_DECL_SUFFIX);
+
+    for (int w = 4; w <= 128; w <<= 1)
+        if (check_func(c->avg_direct, "avg_direct_w%d_%dbpc", w, BITDEPTH)) {
+            for (int h = imax(w / 4, 4); h <= imin(w * 4, 128); h <<= 1)
+            {
+#if BITDEPTH == 16
+                const int bitdepth_max = rnd() & 1 ? 0x3ff : 0xfff;
+#else
+                const int bitdepth_max = 0xff;
+#endif
+                /* the reference planes are strided and deliberately
+                 * misaligned relative to each other, because the fused path
+                 * reads them straight out of two different pictures */
+                for (int i = 0; i < 2; i++)
+                    for (int k = 0; k < 135 * 135; k++)
+                        src[i][k] = rnd() & bitdepth_max;
+
+                const ptrdiff_t s1s = 135 * sizeof(pixel);
+                const ptrdiff_t s2s = 134 * sizeof(pixel);
+
+                CLEAR_PIXEL_RECT(c_dst);
+                CLEAR_PIXEL_RECT(a_dst);
+
+                call_ref(c_dst, c_dst_stride, src[0], s1s, src[1] + 1, s2s,
+                         w, h HIGHBD_TAIL_SUFFIX);
+                call_new(a_dst, a_dst_stride, src[0], s1s, src[1] + 1, s2s,
+                         w, h HIGHBD_TAIL_SUFFIX);
+                checkasm_check_pixel_padded(c_dst, c_dst_stride,
+                                            a_dst, a_dst_stride, w, h, "dst");
+
+                bench_new(a_dst, a_dst_stride, src[0], s1s, src[1] + 1, s2s,
+                          w, h HIGHBD_TAIL_SUFFIX);
+            }
+        }
+    report("avg_direct");
+}
+
 static void check_w_avg(Dav1dMCDSPContext *const c) {
     ALIGN_STK_64(int16_t, tmp, 2, [128 * 128]);
     PIXEL_RECT(c_dst, 135, 135);
@@ -779,6 +825,7 @@ void bitfn(checkasm_check_mc)(void) {
     check_mc_scaled(&c);
     check_mct_scaled(&c);
     check_avg(&c);
+    check_avg_direct(&c);
     check_w_avg(&c);
     check_mask(&c);
     check_w_mask(&c);
