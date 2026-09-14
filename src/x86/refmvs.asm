@@ -298,64 +298,121 @@ cglobal save_tmvs, 6, 7, 8, rp, stride, rr, ref_sign, \
 INIT_XMM sse2
 ; refmvs_block **rr, refmvs_block *a, int bx4, int bw4, int bh4
 cglobal splat_mv, 4, 5, 3, rr, a, bx4, bw4, bh4
-    add           bx4d, bw4d
     tzcnt         bw4d, bw4d
     mova            m2, [aq]
     LEA             aq, splat_mv_sse2_table
-    lea           bx4q, [bx4q*3-32]
     movsxd        bw4q, [aq+bw4q*4]
-    movifnidn     bh4d, bh4m
+    lea           bx4d, [bx4q*3]
     pshufd          m0, m2, q0210
     pshufd          m1, m2, q1021
     pshufd          m2, m2, q2102
+    shl           bx4q, 2
     add           bw4q, aq
-.loop:
-    mov             aq, [rrq]
-    add            rrq, gprsize
-    lea             aq, [aq+bx4q*4]
+    movsxd        bh4q, bh4m
+    lea            rrq, [rrq+bh4q*gprsize]
+    neg           bh4q
     jmp           bw4q
-.w32:
-    mova    [aq-16*16], m0
-    mova    [aq-16*15], m1
-    mova    [aq-16*14], m2
-    mova    [aq-16*13], m0
-    mova    [aq-16*12], m1
-    mova    [aq-16*11], m2
-    mova    [aq-16*10], m0
-    mova    [aq-16* 9], m1
-    mova    [aq-16* 8], m2
-    mova    [aq-16* 7], m0
-    mova    [aq-16* 6], m1
-    mova    [aq-16* 5], m2
-.w16:
-    mova    [aq-16* 4], m0
-    mova    [aq-16* 3], m1
-    mova    [aq-16* 2], m2
-    mova    [aq-16* 1], m0
-    mova    [aq+16* 0], m1
-    mova    [aq+16* 1], m2
-.w8:
-    mova    [aq+16* 2], m0
-    mova    [aq+16* 3], m1
-    mova    [aq+16* 4], m2
-.w4:
-    mova    [aq+16* 5], m0
-    mova    [aq+16* 6], m1
-    mova    [aq+16* 7], m2
-    dec           bh4d
-    jg .loop
+.w1:
+    mov             aq, [rrq+bh4q*gprsize]
+    movq     [aq+bx4q], m0
+    movd   [aq+bx4q+8], m2
+    inc           bh4q
+    jl .w1
     RET
 .w2:
-    movu      [aq+104], m0
-    movq      [aq+120], m1
-    dec           bh4d
-    jg .loop
+    mov             aq, [rrq+bh4q*gprsize]
+    movu     [aq+bx4q], m0
+    movq  [aq+bx4q+16], m1
+    inc           bh4q
+    jl .w2
     RET
-.w1:
-    movq      [aq+116], m0
-    movd      [aq+124], m2
-    dec           bh4d
-    jg .loop
+.w4:
+    mov             aq, [rrq+bh4q*gprsize]
+    add             aq, bx4q
+    mova     [aq+16*0], m0
+    mova     [aq+16*1], m1
+    mova     [aq+16*2], m2
+    inc           bh4q
+    jl .w4
+    RET
+.w8:
+    test          bh4d, 1
+    jz .w8_loop2
+    mov             aq, [rrq+bh4q*gprsize]
+    add             aq, bx4q
+%assign i 0
+%rep 2
+    mova     [aq+16*(i*3+0)], m0
+    mova     [aq+16*(i*3+1)], m1
+    mova     [aq+16*(i*3+2)], m2
+%assign i i+1
+%endrep
+    inc           bh4q
+    jge .w8_ret
+.w8_loop2:
+    mov             aq, [rrq+bh4q*gprsize]
+    mov           bw4q, [rrq+bh4q*gprsize+gprsize]
+    add             aq, bx4q
+    add           bw4q, bx4q
+%assign i 0
+%rep 2
+    mova     [aq+16*(i*3+0)], m0
+    mova    [bw4q+16*(i*3+0)], m0
+    mova     [aq+16*(i*3+1)], m1
+    mova    [bw4q+16*(i*3+1)], m1
+    mova     [aq+16*(i*3+2)], m2
+    mova    [bw4q+16*(i*3+2)], m2
+%assign i i+1
+%endrep
+    add           bh4q, 2
+    jl .w8_loop2
+.w8_ret:
+    RET
+.w16:
+    test          bh4d, 1
+    jz .w16_loop2
+    mov             aq, [rrq+bh4q*gprsize]
+    add             aq, bx4q
+%assign i 0
+%rep 4
+    mova     [aq+16*(i*3+0)], m0
+    mova     [aq+16*(i*3+1)], m1
+    mova     [aq+16*(i*3+2)], m2
+%assign i i+1
+%endrep
+    inc           bh4q
+    jge .w16_ret
+.w16_loop2:
+    mov             aq, [rrq+bh4q*gprsize]
+    mov           bw4q, [rrq+bh4q*gprsize+gprsize]
+    add             aq, bx4q
+    add           bw4q, bx4q
+%assign i 0
+%rep 4
+    mova     [aq+16*(i*3+0)], m0
+    mova    [bw4q+16*(i*3+0)], m0
+    mova     [aq+16*(i*3+1)], m1
+    mova    [bw4q+16*(i*3+1)], m1
+    mova     [aq+16*(i*3+2)], m2
+    mova    [bw4q+16*(i*3+2)], m2
+%assign i i+1
+%endrep
+    add           bh4q, 2
+    jl .w16_loop2
+.w16_ret:
+    RET
+.w32:
+    mov             aq, [rrq+bh4q*gprsize]
+    add             aq, bx4q
+%assign i 0
+%rep 8
+    mova     [aq+16*(i*3+0)], m0
+    mova     [aq+16*(i*3+1)], m1
+    mova     [aq+16*(i*3+2)], m2
+%assign i i+1
+%endrep
+    inc           bh4q
+    jl .w32
     RET
 
 %if ARCH_X86_64
