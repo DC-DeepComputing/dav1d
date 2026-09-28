@@ -25,6 +25,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <string.h>
+
 #include "common/attributes.h"
 #include "src/ppc/mc.h"
 #include "src/tables.h"
@@ -144,10 +146,15 @@ static void blend4(uint8_t *dst, const uint8_t *tmp, const uint8_t *mask, int st
     u8x16 d2 = (u8x16)vec_pack(d2_u16, d2_u16);
     u8x16 d3 = (u8x16)vec_pack(d3_u16, d3_u16);
 
-    vec_xst_len(d0, dst, 4);
-    vec_xst_len(d1, dst + stride, 4);
-    vec_xst_len(d2, dst + 2 * stride, 4);
-    vec_xst_len(d3, dst + 3 * stride, 4);
+    uint32_t r0, r1, r2, r3;
+    memcpy(&r0, &d0, 4);
+    memcpy(&r1, &d1, 4);
+    memcpy(&r2, &d2, 4);
+    memcpy(&r3, &d3, 4);
+    memcpy(dst, &r0, 4);
+    memcpy(dst + stride, &r1, 4);
+    memcpy(dst + 2 * stride, &r2, 4);
+    memcpy(dst + 3 * stride, &r3, 4);
 }
 
 static void blend8(uint8_t *dst, const uint8_t *tmp, const uint8_t *mask, int stride)
@@ -189,10 +196,15 @@ static void blend8(uint8_t *dst, const uint8_t *tmp, const uint8_t *mask, int st
     u8x16 d2 = (u8x16)vec_pack(d2_u16, d2_u16);
     u8x16 d3 = (u8x16)vec_pack(d3_u16, d3_u16);
 
-    vec_xst_len(d0, dst, 8);
-    vec_xst_len(d1, dst + stride, 8);
-    vec_xst_len(d2, dst + 2 * stride, 8);
-    vec_xst_len(d3, dst + 3 * stride, 8);
+    uint64_t s0, s1, s2, s3;
+    memcpy(&s0, &d0, 8);
+    memcpy(&s1, &d1, 8);
+    memcpy(&s2, &d2, 8);
+    memcpy(&s3, &d3, 8);
+    memcpy(dst, &s0, 8);
+    memcpy(dst + stride, &s1, 8);
+    memcpy(dst + 2 * stride, &s2, 8);
+    memcpy(dst + 3 * stride, &s3, 8);
 }
 
 static inline void blend16_lines(uint8_t *dst, const uint8_t *tmp, const uint8_t *mask, int stride, int mstride)
@@ -548,6 +560,176 @@ void dav1d_blend_h_8bpc_pwr9(pixel *dst, const ptrdiff_t dst_stride, const pixel
         dst += 3 * PXSTRIDE(dst_stride);
         tmp += 3 * w;
         mask += 3;
+    }
+}
+
+void dav1d_avg_8bpc_pwr9(pixel *dst, const ptrdiff_t dst_stride,
+                         const int16_t *tmp1, const int16_t *tmp2,
+                         const int w, int h)
+{
+    const i16x8 v16 = vec_splats((int16_t)16);
+    const u16x8 v5  = vec_splat_u16(5);
+
+    if (w == 4) {
+        while (h >= 2) {
+            const i16x8 t1 = vec_xl(0, tmp1);
+            const i16x8 t2 = vec_xl(0, tmp2);
+            const i16x8 s  = vec_sra(vec_add(vec_add(t1, t2), v16), v5);
+            const u8x16 res = vec_packsu(s, s);
+            uint32_t r0, r1;
+            memcpy(&r0, (const char*)&res + 0, 4);
+            memcpy(&r1, (const char*)&res + 4, 4);
+            memcpy(dst, &r0, 4);
+            memcpy(dst + PXSTRIDE(dst_stride), &r1, 4);
+            tmp1 += 8;
+            tmp2 += 8;
+            dst += 2 * PXSTRIDE(dst_stride);
+            h -= 2;
+        }
+        if (h == 1) {
+            const i16x8 t1 = vec_xl(0, tmp1);
+            const i16x8 t2 = vec_xl(0, tmp2);
+            const i16x8 s  = vec_sra(vec_add(vec_add(t1, t2), v16), v5);
+            const u8x16 res = vec_packsu(s, s);
+            uint32_t r0;
+            memcpy(&r0, (const char*)&res + 0, 4);
+            memcpy(dst, &r0, 4);
+        }
+    } else if (w == 8) {
+        while (h >= 2) {
+            const i16x8 t1_0 = vec_xl(0, tmp1);
+            const i16x8 t2_0 = vec_xl(0, tmp2);
+            const i16x8 t1_1 = vec_xl(0, tmp1 + 8);
+            const i16x8 t2_1 = vec_xl(0, tmp2 + 8);
+            const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+            const i16x8 s1 = vec_sra(vec_add(vec_add(t1_1, t2_1), v16), v5);
+            const u8x16 res = vec_packsu(s0, s1);
+            uint64_t r0, r1;
+            memcpy(&r0, (const char*)&res + 0, 8);
+            memcpy(&r1, (const char*)&res + 8, 8);
+            memcpy(dst, &r0, 8);
+            memcpy(dst + PXSTRIDE(dst_stride), &r1, 8);
+            tmp1 += 16;
+            tmp2 += 16;
+            dst += 2 * PXSTRIDE(dst_stride);
+            h -= 2;
+        }
+        if (h == 1) {
+            const i16x8 t1_0 = vec_xl(0, tmp1);
+            const i16x8 t2_0 = vec_xl(0, tmp2);
+            const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+            const u8x16 res = vec_packsu(s0, s0);
+            uint64_t r0;
+            memcpy(&r0, (const char*)&res + 0, 8);
+            memcpy(dst, &r0, 8);
+        }
+    } else if (w == 16) {
+        while (h >= 2) {
+            const i16x8 t1_0 = vec_xl(0, tmp1);
+            const i16x8 t1_1 = vec_xl(0, tmp1 + 8);
+            const i16x8 t2_0 = vec_xl(0, tmp2);
+            const i16x8 t2_1 = vec_xl(0, tmp2 + 8);
+            const i16x8 t1_2 = vec_xl(0, tmp1 + 16);
+            const i16x8 t1_3 = vec_xl(0, tmp1 + 24);
+            const i16x8 t2_2 = vec_xl(0, tmp2 + 16);
+            const i16x8 t2_3 = vec_xl(0, tmp2 + 24);
+
+            const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+            const i16x8 s1 = vec_sra(vec_add(vec_add(t1_1, t2_1), v16), v5);
+            const i16x8 s2 = vec_sra(vec_add(vec_add(t1_2, t2_2), v16), v5);
+            const i16x8 s3 = vec_sra(vec_add(vec_add(t1_3, t2_3), v16), v5);
+
+            const u8x16 res0 = vec_packsu(s0, s1);
+            const u8x16 res1 = vec_packsu(s2, s3);
+            vec_xst(res0, 0, dst);
+            vec_xst(res1, 0, dst + PXSTRIDE(dst_stride));
+
+            tmp1 += 32;
+            tmp2 += 32;
+            dst += 2 * PXSTRIDE(dst_stride);
+            h -= 2;
+        }
+        if (h == 1) {
+            const i16x8 t1_0 = vec_xl(0, tmp1);
+            const i16x8 t1_1 = vec_xl(0, tmp1 + 8);
+            const i16x8 t2_0 = vec_xl(0, tmp2);
+            const i16x8 t2_1 = vec_xl(0, tmp2 + 8);
+            const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+            const i16x8 s1 = vec_sra(vec_add(vec_add(t1_1, t2_1), v16), v5);
+            const u8x16 res = vec_packsu(s0, s1);
+            vec_xst(res, 0, dst);
+        }
+    } else if (w == 32) {
+        do {
+            const i16x8 t1_0 = vec_xl(0, tmp1);
+            const i16x8 t1_1 = vec_xl(0, tmp1 + 8);
+            const i16x8 t1_2 = vec_xl(0, tmp1 + 16);
+            const i16x8 t1_3 = vec_xl(0, tmp1 + 24);
+
+            const i16x8 t2_0 = vec_xl(0, tmp2);
+            const i16x8 t2_1 = vec_xl(0, tmp2 + 8);
+            const i16x8 t2_2 = vec_xl(0, tmp2 + 16);
+            const i16x8 t2_3 = vec_xl(0, tmp2 + 24);
+
+            const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+            const i16x8 s1 = vec_sra(vec_add(vec_add(t1_1, t2_1), v16), v5);
+            const i16x8 s2 = vec_sra(vec_add(vec_add(t1_2, t2_2), v16), v5);
+            const i16x8 s3 = vec_sra(vec_add(vec_add(t1_3, t2_3), v16), v5);
+
+            const u8x16 res0 = vec_packsu(s0, s1);
+            const u8x16 res1 = vec_packsu(s2, s3);
+
+            vec_xst(res0, 0, dst);
+            vec_xst(res1, 0, dst + 16);
+
+            tmp1 += 32;
+            tmp2 += 32;
+            dst += PXSTRIDE(dst_stride);
+        } while (--h);
+    } else {
+        do {
+            for (int x = 0; x < w; x += 64) {
+                const i16x8 t1_0 = vec_xl(0, tmp1 + x);
+                const i16x8 t1_1 = vec_xl(0, tmp1 + x + 8);
+                const i16x8 t1_2 = vec_xl(0, tmp1 + x + 16);
+                const i16x8 t1_3 = vec_xl(0, tmp1 + x + 24);
+                const i16x8 t1_4 = vec_xl(0, tmp1 + x + 32);
+                const i16x8 t1_5 = vec_xl(0, tmp1 + x + 40);
+                const i16x8 t1_6 = vec_xl(0, tmp1 + x + 48);
+                const i16x8 t1_7 = vec_xl(0, tmp1 + x + 56);
+
+                const i16x8 t2_0 = vec_xl(0, tmp2 + x);
+                const i16x8 t2_1 = vec_xl(0, tmp2 + x + 8);
+                const i16x8 t2_2 = vec_xl(0, tmp2 + x + 16);
+                const i16x8 t2_3 = vec_xl(0, tmp2 + x + 24);
+                const i16x8 t2_4 = vec_xl(0, tmp2 + x + 32);
+                const i16x8 t2_5 = vec_xl(0, tmp2 + x + 40);
+                const i16x8 t2_6 = vec_xl(0, tmp2 + x + 48);
+                const i16x8 t2_7 = vec_xl(0, tmp2 + x + 56);
+
+                const i16x8 s0 = vec_sra(vec_add(vec_add(t1_0, t2_0), v16), v5);
+                const i16x8 s1 = vec_sra(vec_add(vec_add(t1_1, t2_1), v16), v5);
+                const i16x8 s2 = vec_sra(vec_add(vec_add(t1_2, t2_2), v16), v5);
+                const i16x8 s3 = vec_sra(vec_add(vec_add(t1_3, t2_3), v16), v5);
+                const i16x8 s4 = vec_sra(vec_add(vec_add(t1_4, t2_4), v16), v5);
+                const i16x8 s5 = vec_sra(vec_add(vec_add(t1_5, t2_5), v16), v5);
+                const i16x8 s6 = vec_sra(vec_add(vec_add(t1_6, t2_6), v16), v5);
+                const i16x8 s7 = vec_sra(vec_add(vec_add(t1_7, t2_7), v16), v5);
+
+                const u8x16 res0 = vec_packsu(s0, s1);
+                const u8x16 res1 = vec_packsu(s2, s3);
+                const u8x16 res2 = vec_packsu(s4, s5);
+                const u8x16 res3 = vec_packsu(s6, s7);
+
+                vec_xst(res0, 0, dst + x);
+                vec_xst(res1, 0, dst + x + 16);
+                vec_xst(res2, 0, dst + x + 32);
+                vec_xst(res3, 0, dst + x + 48);
+            }
+            tmp1 += w;
+            tmp2 += w;
+            dst += PXSTRIDE(dst_stride);
+        } while (--h);
     }
 }
 

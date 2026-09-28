@@ -28,6 +28,7 @@
 #include "src/cpu.h"
 #include "src/mc.h"
 
+decl_avg_fn(BF(dav1d_avg, pwr9));
 decl_blend_fn(BF(dav1d_blend, pwr9));
 decl_blend_dir_fn(BF(dav1d_blend_h, pwr9));
 decl_blend_dir_fn(BF(dav1d_blend_v, pwr9));
@@ -38,6 +39,7 @@ static ALWAYS_INLINE void mc_dsp_init_ppc(Dav1dMCDSPContext *const c) {
   if (!(flags & DAV1D_PPC_CPU_FLAG_PWR9)) return;
 
 #if BITDEPTH == 8
+  c->avg = BF(dav1d_avg, pwr9);
   c->blend = BF(dav1d_blend, pwr9);
   c->blend_h = BF(dav1d_blend_h, pwr9);
   c->blend_v = BF(dav1d_blend_v, pwr9);

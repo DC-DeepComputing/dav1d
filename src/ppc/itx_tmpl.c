@@ -105,23 +105,39 @@
     u8x16 a, b, c, d; \
     LOAD_4(src, stride, a, b, c, d)
 
-#define STORE_LEN(l, dst, stride, a, b, c, d) \
+#define STORE_4(dst, stride, a, b, c, d) \
 { \
     uint8_t *dst2 = dst; \
-    vec_xst_len(a, dst2, l); \
+    uint32_t r0, r1, r2, r3; \
+    memcpy(&r0, &a, 4); \
+    memcpy(&r1, &b, 4); \
+    memcpy(&r2, &c, 4); \
+    memcpy(&r3, &d, 4); \
+    memcpy(dst2, &r0, 4); \
     dst2 += stride; \
-    vec_xst_len(b, dst2, l); \
+    memcpy(dst2, &r1, 4); \
     dst2 += stride; \
-    vec_xst_len(c, dst2, l); \
+    memcpy(dst2, &r2, 4); \
     dst2 += stride; \
-    vec_xst_len(d, dst2, l); \
+    memcpy(dst2, &r3, 4); \
 }
 
-#define STORE_4(dst, stride, a, b, c, d) \
-    STORE_LEN(4, dst, stride, a, b, c, d)
-
 #define STORE_8(dst, stride, ab, cd, ef, gh) \
-    STORE_LEN(8, dst, stride, ab, cd, ef, gh)
+{ \
+    uint8_t *dst2 = dst; \
+    uint64_t r0, r1, r2, r3; \
+    memcpy(&r0, &ab, 8); \
+    memcpy(&r1, &cd, 8); \
+    memcpy(&r2, &ef, 8); \
+    memcpy(&r3, &gh, 8); \
+    memcpy(dst2, &r0, 8); \
+    dst2 += stride; \
+    memcpy(dst2, &r1, 8); \
+    dst2 += stride; \
+    memcpy(dst2, &r2, 8); \
+    dst2 += stride; \
+    memcpy(dst2, &r3, 8); \
+}
 
 #define STORE_16(dst, stride, l0, l1, l2, l3) \
 { \
@@ -375,22 +391,27 @@ static void dc_only_4xN(uint8_t *dst, const ptrdiff_t stride, int16_t *const coe
     for (int i = 0; i < n; i++, dst += 4 * stride) {
         LOAD_DECLARE_4(dst, stride, a, b, c, d)
 
-        i16x8 as = u8h_to_i16(a);
-        i16x8 bs = u8h_to_i16(b);
-        i16x8 cs = u8h_to_i16(c);
-        i16x8 ds = u8h_to_i16(d);
+        const u32x4 ab = vec_mergeh((u32x4)a, (u32x4)b);
+        const u32x4 cd = vec_mergeh((u32x4)c, (u32x4)d);
+        const u8x16 abcd = (u8x16)vec_mergeh((u64x2)ab, (u64x2)cd);
 
-        as = vec_adds(as, vdc);
-        bs = vec_adds(bs, vdc);
-        cs = vec_adds(cs, vdc);
-        ds = vec_adds(ds, vdc);
+        i16x8 s0 = u8h_to_i16(abcd);
+        i16x8 s1 = u8l_to_i16(abcd);
 
-        a = vec_packsu(as, as);
-        b = vec_packsu(bs, bs);
-        c = vec_packsu(cs, cs);
-        d = vec_packsu(ds, ds);
+        s0 = vec_adds(s0, vdc);
+        s1 = vec_adds(s1, vdc);
 
-        STORE_4(dst, stride, a, b, c, d)
+        const u8x16 res = vec_packsu(s0, s1);
+
+        uint32_t r0, r1, r2, r3;
+        memcpy(&r0, (const char*)&res + 0, 4);
+        memcpy(&r1, (const char*)&res + 4, 4);
+        memcpy(&r2, (const char*)&res + 8, 4);
+        memcpy(&r3, (const char*)&res + 12, 4);
+        memcpy(dst, &r0, 4);
+        memcpy(dst + stride, &r1, 4);
+        memcpy(dst + 2 * stride, &r2, 4);
+        memcpy(dst + 3 * stride, &r3, 4);
     }
 }
 
@@ -410,22 +431,31 @@ static void dc_only_8xN(uint8_t *dst, const ptrdiff_t stride, int16_t *const coe
     for (int i = 0; i < n; i++, dst += 4 * stride) {
         LOAD_DECLARE_4(dst, stride, a, b, c, d)
 
-        i16x8 as = u8h_to_i16(a);
-        i16x8 bs = u8h_to_i16(b);
-        i16x8 cs = u8h_to_i16(c);
-        i16x8 ds = u8h_to_i16(d);
+        const u8x16 ab = (u8x16)vec_mergeh((u64x2)a, (u64x2)b);
+        const u8x16 cd = (u8x16)vec_mergeh((u64x2)c, (u64x2)d);
 
-        as = vec_adds(as, vdc);
-        bs = vec_adds(bs, vdc);
-        cs = vec_adds(cs, vdc);
-        ds = vec_adds(ds, vdc);
+        i16x8 s0 = u8h_to_i16(ab);
+        i16x8 s1 = u8l_to_i16(ab);
+        i16x8 s2 = u8h_to_i16(cd);
+        i16x8 s3 = u8l_to_i16(cd);
 
-        a = vec_packsu(as, as);
-        b = vec_packsu(bs, bs);
-        c = vec_packsu(cs, cs);
-        d = vec_packsu(ds, ds);
+        s0 = vec_adds(s0, vdc);
+        s1 = vec_adds(s1, vdc);
+        s2 = vec_adds(s2, vdc);
+        s3 = vec_adds(s3, vdc);
 
-        STORE_8(dst, stride, a, b, c, d)
+        const u8x16 res_ab = vec_packsu(s0, s1);
+        const u8x16 res_cd = vec_packsu(s2, s3);
+
+        uint64_t r0, r1, r2, r3;
+        memcpy(&r0, (const char*)&res_ab + 0, 8);
+        memcpy(&r1, (const char*)&res_ab + 8, 8);
+        memcpy(&r2, (const char*)&res_cd + 0, 8);
+        memcpy(&r3, (const char*)&res_cd + 8, 8);
+        memcpy(dst, &r0, 8);
+        memcpy(dst + stride, &r1, 8);
+        memcpy(dst + 2 * stride, &r2, 8);
+        memcpy(dst + 3 * stride, &r3, 8);
     }
 }
 

@@ -268,29 +268,34 @@
 
 static inline void store_h_4(u8x16 out, uint8_t *dst, int stridea)
 {
-    u8x16 out1 = (u8x16)vec_splat((u32x4)out, 1);
-    u8x16 out2 = (u8x16)vec_splat((u32x4)out, 2);
-    u8x16 out3 = (u8x16)vec_splat((u32x4)out, 3);
-    vec_xst_len(out, dst, 4);
+    uint32_t r0, r1, r2, r3;
+    memcpy(&r0, (const char*)&out + 0, 4);
+    memcpy(&r1, (const char*)&out + 4, 4);
+    memcpy(&r2, (const char*)&out + 8, 4);
+    memcpy(&r3, (const char*)&out + 12, 4);
+    memcpy(dst, &r0, 4);
     dst += stridea;
-    vec_xst_len(out1, dst, 4);
+    memcpy(dst, &r1, 4);
     dst += stridea;
-    vec_xst_len(out2, dst, 4);
+    memcpy(dst, &r2, 4);
     dst += stridea;
-    vec_xst_len(out3, dst, 4);
+    memcpy(dst, &r3, 4);
 }
 
 static inline void store_h_8(u8x16 outa, u8x16 outb, uint8_t *dst, int stridea)
 {
-    u8x16 out1 = (u8x16)vec_mergel((u64x2)outa, (u64x2)outa);
-    u8x16 out3 = (u8x16)vec_mergel((u64x2)outb, (u64x2)outb);
-    vec_xst_len(outa, dst, 6);
+    memcpy(dst, (const char*)&outa + 0, 6);
     dst += stridea;
-    vec_xst_len(out1, dst, 6);
+    memcpy(dst, (const char*)&outa + 8, 6);
     dst += stridea;
-    vec_xst_len(outb, dst, 6);
+    memcpy(dst, (const char*)&outb + 0, 6);
     dst += stridea;
-    vec_xst_len(out3, dst, 6);
+    memcpy(dst, (const char*)&outb + 8, 6);
+}
+
+static inline void store_12(u8x16 v, uint8_t *dst)
+{
+    memcpy(dst, &v, 12);
 }
 
 // Assume a layout  {v}0 {v}1 {v}2 {v}3, produces {v}01 {v}23
@@ -906,51 +911,51 @@ loop_filter_h_16_all(uint8_t *dst, u8x16 E, u8x16 I, u8x16 H,
 
     MERGEHL_U32(a01, a_p5p4p3p2q2q3q4q5h, a_p1p0q0q1q2q3q4q5h) // A0 p5p4p3p2 p1p0q0q1 q2q3q4q5 q2q3q4q5
                                                                // A1
-    vec_xst_len(a01h, dst2, 12);
+    store_12(a01h, dst2);
     dst2 += stridea;
-    vec_xst_len(a01l, dst2, 12);
+    store_12(a01l, dst2);
     dst2 += stridea;
     MERGEHL_U32(a23, a_p5p4p3p2q2q3q4q5l, a_p1p0q0q1q2q3q4q5l) // A2
                                                                // A3
-    vec_xst_len(a23h, dst2, 12);
+    store_12(a23h, dst2);
     dst2 += stridea;
-    vec_xst_len(a23l, dst2, 12);
+    store_12(a23l, dst2);
     dst2 += stridea;
     MERGEHL_U32(b01, b_p5p4p3p2q2q3q4q5h, b_p1p0q0q1q2q3q4q5h) // B0 p5p4p3p2 p1p0q0q1 q2q3q4q5 q2q3q4q5
                                                                // B1
-    vec_xst_len(b01h, dst2, 12);
+    store_12(b01h, dst2);
     dst2 += stridea;
-    vec_xst_len(b01l, dst2, 12);
+    store_12(b01l, dst2);
     dst2 += stridea;
     MERGEHL_U32(b23, b_p5p4p3p2q2q3q4q5l, b_p1p0q0q1q2q3q4q5l) // B2
                                                                // B3
-    vec_xst_len(b23h, dst2, 12);
+    store_12(b23h, dst2);
     dst2 += stridea;
-    vec_xst_len(b23l, dst2, 12);
+    store_12(b23l, dst2);
     dst2 += stridea;
     MERGEHL_U32(c01, c_p5p4p3p2q2q3q4q5h, c_p1p0q0q1q2q3q4q5h) // C0 p5p4p3p2 p1p0q0q1 q2q3q4q5 q2q3q4q5
                                                                // C1
-    vec_xst_len(c01h, dst2, 12);
+    store_12(c01h, dst2);
     dst2 += stridea;
-    vec_xst_len(c01l, dst2, 12);
+    store_12(c01l, dst2);
     dst2 += stridea;
     MERGEHL_U32(c23, c_p5p4p3p2q2q3q4q5l, c_p1p0q0q1q2q3q4q5l) // C2
                                                                // C3
-    vec_xst_len(c23h, dst2, 12);
+    store_12(c23h, dst2);
     dst2 += stridea;
-    vec_xst_len(c23l, dst2, 12);
+    store_12(c23l, dst2);
     dst2 += stridea;
     MERGEHL_U32(d01, d_p5p4p3p2q2q3q4q5h, d_p1p0q0q1q2q3q4q5h) // D0 p5p4p3p2 p1p0q0q1 q2q3q4q5 q2q3q4q5
                                                                // D1
-    vec_xst_len(d01h, dst2, 12);
+    store_12(d01h, dst2);
     dst2 += stridea;
-    vec_xst_len(d01l, dst2, 12);
+    store_12(d01l, dst2);
     dst2 += stridea;
     MERGEHL_U32(d23, d_p5p4p3p2q2q3q4q5l, d_p1p0q0q1q2q3q4q5l) // D2
                                                                // D3
-    vec_xst_len(d23h, dst2, 12);
+    store_12(d23h, dst2);
     dst2 += stridea;
-    vec_xst_len(d23l, dst2, 12);
+    store_12(d23l, dst2);
     dst2 += stridea;
 }
 
