@@ -440,6 +440,7 @@ struct Dav1dTaskContext {
                 };
             };
         };
+        uint8_t txa[2 /* edge */][2 /* txsz, step */][32 /* y */][32 /* x */];
     } scratch;
 
     Dav1dWarpedMotionParams warpmv;

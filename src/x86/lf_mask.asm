@@ -29,6 +29,9 @@
 
 SECTION_RODATA
 
+times 32 db 255
+vmask_lookup: times 32 db 0
+
 %macro JMP_TABLE 2-*
     %1_table:
     %xdefine %%base %1_table
@@ -175,5 +178,139 @@ cglobal fill_levelcache_block, 4, 7, 5, lc_ptr, stride, bw, bh, v0, v1, tmp
     movu     [lc_ptrq+32], m0
     LC_PTR_LOOP .w32_loop
 
+%macro SCALAR_MASK_EDGE 1
+    mov            masksq, masksm
+    mov              txaq, txam
+
+; masks holds pointer into masks[0][bx4] or masks[1][by4] and is advanced one
+; byte when crossing a 8-bit mask boundary
+%ifidn %1, left
+%define laq lq
+    lea             tmp1d, [3*bx4q]
+    lea            masksq, [masksq+4*tmp1q]
+    mov             tmp1d, by4d
+    mov             tmp2d, by4d
+    lea           la_endq, [lq+h4q]
+%else
+%define laq aq
+    lea             tmp1d, [3*by4q]
+    lea            masksq, [masksq+4*tmp1q+384]
+    mov             tmp1d, bx4d
+    mov             tmp2d, bx4d
+    lea           la_endq, [aq+w4q]
+    add              txaq, 2048
+    mov             tmp3d, h4d
+    shl             tmp3q, 5
+%endif
+    shr             tmp1d, 3
+    add            masksq, tmp1q                 ; pre-advance masks
+
+    and             tmp2d, 7
+    xor             maskd, maskd
+    bts             maskd, tmp2d                 ; mask = 1 << (by4 % 8)
+%%loop:
+    movzx           tmp1d, byte [laq]
+    movzx           tmp2d, byte [txaq]
+    cmp             tmp1d, tmp2d                 ; imin(txa[0][0][y][0], l[y])
+    cmovae          tmp1d, tmp2d                 ; or imin(txa[1][0][0][x], a[x])
+
+%ifidn %1, left
+    movzx           tmp2d, byte [txaq+w4q-1]     ; l[y] = txa[0][0][y][w4-1]
+%else
+    movzx           tmp2d, byte [txaq+tmp3q-32]  ; a[y] = txa[1][0][h4-1][x]
+%endif
+    mov             [laq], tmp2b
+
+    or   [masksq+4*tmp1q], maskb
+    rol             maskb, 1
+    adc            masksq, 0                     ; advance to the next byte if necessary
+
+%ifidn %1, left
+    add              txaq, 32
+%else
+    inc              txaq
+%endif
+    inc               laq
+    cmp               laq, la_endq
+    jne %%loop
+
+%endmacro
+
+INIT_XMM sse2
+; void mask_edges_inter_outer(uint8_t *a, uint8_t *l, int by4, int bx4, int w4, int h4,
+;                             uint16_t (*masks)[32][3][2], uint8_t txa[2][2][32][32])
+cglobal mask_edges_inter_outer, 4, 13, 0, a, l, by4, bx4, w4, h4, masks, txa, \
+        mask, tmp1, tmp2, tmp3, la_end
+    mov               w4d, w4m
+    mov               h4d, h4m
+
+.scalar_top:
+    SCALAR_MASK_EDGE top
+.scalar_left:
+    SCALAR_MASK_EDGE left
+    RET
+
+%macro MAYBE_STORE 2
+; the buffer is accessed concurrently from multiple threads so we must be careful
+; to only store words that have changed
+    shlx          %1 %+ d, %1 %+ d, bx4d
+    test          %1 %+ w, %1 %+ w
+    jz %%skip_lower
+    or      [masksq+4*%2], %1 %+ w
+%%skip_lower:
+    shr           %1 %+ d, 16
+    jz %%skip_upper
+    or    [masksq+4*%2+2], %1 %+ w
+%%skip_upper:
+%endmacro
+
+
+INIT_YMM avx2
+; void mask_edges_inter_outer(uint8_t *a, uint8_t *l, int by4, int bx4, int w4, int h4,
+;                             uint16_t (*masks)[32][3][2], uint8_t txa[2][2][32][32])
+cglobal mask_edges_inter_outer, 4, 13, 0, a, l, by4, bx4, w4, h4, masks, txa, \
+        mask, tmp1, tmp2, tmp3, la_end
+    mov               w4d, w4m
+    mov               h4d, h4m
+
+    cmp               w4d, 16
+    jl mangle(private_prefix %+ _mask_edges_inter_outer_sse2).scalar_top
+
+.vector_top:
+    mov            masksq, masksm
+    mov              txaq, txam
+
+    lea             tmp1d, [3*by4q]
+    lea            masksq, [masksq+4*tmp1q+384]
+    mov             tmp1d, h4d
+    shl             tmp1d, 5
+
+    lea             tmp2q, [vmask_lookup]
+    sub             tmp2q, w4q
+    movu               m3, [tmp2q]    ; m3 = mask of valid entries in a
+
+    movu               m0, [aq]
+    vpblendvb          m2, m0, [txaq+tmp1q+2048-32], m3
+    movu             [aq], m2
+    pminub             m0, [txaq+2048]
+
+    pxor               m2, m2
+    pcmpeqb            m1, m0, m2
+    pand               m1, m3         ; prevent oob bits in the mask
+    pmovmskb        tmp1d, m1         ; index 0
+
+    pand               m0, m3         ; prevent oob bits in the mask
+    pslld              m1, m0, 7
+    pmovmskb        tmp2d, m1         ; index 1
+
+    pslld              m1, m0, 6
+    pmovmskb        tmp3d, m1         ; index 2
+    vzeroupper
+
+    MAYBE_STORE tmp1, 0
+    MAYBE_STORE tmp2, 1
+    MAYBE_STORE tmp3, 2
+
+    jmp mangle(private_prefix %+ _mask_edges_inter_outer_sse2).scalar_left
 
 %endif  ; ARCH_X86_64

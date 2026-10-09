@@ -1936,8 +1936,7 @@ static int decode_b(Dav1dTaskContext *const t,
                 ytx  = (enum RectTxfmSize) TX_4X4;
                 uvtx = (enum RectTxfmSize) TX_4X4;
             }
-            dav1d_create_lf_mask_inter(&t->c->lf_mask_dsp, t->lf_mask, f->lf.level,
-                                       f->b4_stride, lf_lvls, t->bx, t->by, f->w4,
+            dav1d_create_lf_mask_inter(t, f->lf.level, f->b4_stride, lf_lvls, f->w4,
                                        f->h4, b->skip, bs, ytx, tx_split, uvtx,
                                        f->cur.p.layout, &t->a->tx_lpf_y[bx4],
                                        &t->l.tx_lpf_y[by4],
