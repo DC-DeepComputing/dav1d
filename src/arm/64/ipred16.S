@@ -3903,283 +3903,238 @@ endfunc
 function ipred_filter_\bpc\()bpc_neon
         and             w5,  w5,  #511
         movrel          x6,  X(filter_intra_taps)
-        lsl             w5,  w5,  #6
-        add             x6,  x6,  w5, uxtw
-        ld1             {v16.8b, v17.8b, v18.8b, v19.8b}, [x6], #32
         clz             w9,  w3
-        movrel          x5,  ipred_filter\bpc\()_tbl
-        ld1             {v20.8b, v21.8b, v22.8b}, [x6]
+        add             x6,  x6,  x5, lsl #6
         sub             w9,  w9,  #26
-        ldrsw           x9,  [x5, w9, uxtw #2]
-        sxtl            v16.8h,  v16.8b
-        sxtl            v17.8h,  v17.8b
-        add             x5,  x5,  x9
-        sxtl            v18.8h,  v18.8b
-        sxtl            v19.8h,  v19.8b
+        ldp             q17, q19, [x6]
+        ldr             q21, [x6, #32]
+        ldr             d22, [x6, #48]
+        movrel          x5,  ipred_filter\bpc\()_tbl
         add             x6,  x0,  x1
+        ldrsw           x9,  [x5, x9, lsl #2]
+        sxtl            v16.8h,  v17.8b
+        sxtl2           v17.8h,  v17.16b
+        add             x5,  x5,  x9
+        sxtl            v18.8h,  v19.8b
+        sxtl2           v19.8h,  v19.16b
         lsl             x1,  x1,  #1
-        sxtl            v20.8h,  v20.8b
-        sxtl            v21.8h,  v21.8b
+        sxtl            v20.8h,  v21.8b
+        sxtl2           v21.8h,  v21.16b
         sxtl            v22.8h,  v22.8b
         dup             v31.8h,  w8
-.if \bpc == 10
-        movi            v30.8h,  #0
-.endif
         br              x5
 40:
         AARCH64_VALID_JUMP_TARGET
         ldur            d0,  [x2, #2]             // top (0-3)
-        sub             x2,  x2,  #4
-        mov             x7,  #-4
 4:
-        ld1             {v1.4h}, [x2], x7         // left (0-1) + topleft (2)
+        ldr             d1,  [x2, #-4]!           // left (0-1) + topleft (2)
+        subs            w4,  w4,  #2
 .if \bpc == 10
-        mul             v2.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
-        mla             v2.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
-        mla             v2.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
-        mla             v2.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
-        mla             v2.8h,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
-        mla             v2.8h,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
+        mul             v2.8h,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
         mla             v2.8h,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
-        srshr           v2.8h,   v2.8h,   #4
-        smax            v2.8h,   v2.8h,   v30.8h
+        mla             v2.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        mla             v2.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        mul             v3.8h,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
+        mla             v3.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        mla             v3.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        usqadd          v3.8h,   v2.8h
+        srshr           v2.8h,   v3.8h,   #4
+        smin            v2.8h,   v2.8h,   v31.8h
+        ext             v0.16b,  v2.16b,  v2.16b, #8 // move top from [4-7] to [0-3]
 .else
-        smull           v2.4s,   v17.4h,  v0.h[0] // p1(top[0]) * filter(1)
+        smull           v2.4s,   v16.4h,  v1.h[2] // p0(topleft) * filter(0)
+        smlal           v2.4s,   v21.4h,  v1.h[1] // p5(left[0]) * filter(5)
+        smlal           v2.4s,   v22.4h,  v1.h[0] // p6(left[1]) * filter(6)
+        smlal           v2.4s,   v17.4h,  v0.h[0] // p1(top[0]) * filter(1)
         smlal           v2.4s,   v18.4h,  v0.h[1] // p2(top[1]) * filter(2)
         smlal           v2.4s,   v19.4h,  v0.h[2] // p3(top[2]) * filter(3)
         smlal           v2.4s,   v20.4h,  v0.h[3] // p4(top[3]) * filter(4)
-        smlal           v2.4s,   v16.4h,  v1.h[2] // p0(topleft) * filter(0)
-        smlal           v2.4s,   v21.4h,  v1.h[1] // p5(left[0]) * filter(5)
-        smlal           v2.4s,   v22.4h,  v1.h[0] // p6(left[1]) * filter(6)
-        smull2          v3.4s,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        smull2          v3.4s,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
+        smlal2          v3.4s,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
+        smlal2          v3.4s,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
+        smlal2          v3.4s,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
         smlal2          v3.4s,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
         smlal2          v3.4s,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
         smlal2          v3.4s,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
-        smlal2          v3.4s,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
-        smlal2          v3.4s,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
-        smlal2          v3.4s,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
         sqrshrun        v2.4h,   v2.4s,   #4
-        sqrshrun2       v2.8h,   v3.4s,   #4
+        sqrshrun        v3.4h,   v3.4s,   #4
+        smin            v2.4h,   v2.4h,   v31.4h
+        smin            v0.4h,   v3.4h,   v31.4h  // move top from [4-7] to [0-3]
 .endif
-        smin            v2.8h,   v2.8h,   v31.8h
-        subs            w4,  w4,  #2
-        st1             {v2.d}[0], [x0], x1
-        ext             v0.16b,  v2.16b,  v2.16b, #8 // move top from [4-7] to [0-3]
-        st1             {v2.d}[1], [x6], x1
+        st1             {v2.8b},  [x0], x1
+        st1             {v0.8b},  [x6], x1
         b.gt            4b
         ret
 80:
         AARCH64_VALID_JUMP_TARGET
-        ldur            q0,  [x2, #2]             // top (0-7)
-        sub             x2,  x2,  #4
-        mov             x7,  #-4
-8:
-        ld1             {v1.4h}, [x2], x7         // left (0-1) + topleft (2)
 .if \bpc == 10
-        mul             v2.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
-        mla             v2.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
-        mla             v2.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
-        mla             v2.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
-        mla             v2.8h,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
-        mla             v2.8h,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
-        mla             v2.8h,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
-        mul             v3.8h,   v17.8h,  v0.h[4] // p1(top[0]) * filter(1)
-        mla             v3.8h,   v18.8h,  v0.h[5] // p2(top[1]) * filter(2)
-        mla             v3.8h,   v19.8h,  v0.h[6] // p3(top[2]) * filter(3)
-        srshr           v2.8h,   v2.8h,   #4
-        smax            v2.8h,   v2.8h,   v30.8h
-        smin            v2.8h,   v2.8h,   v31.8h
-        mla             v3.8h,   v20.8h,  v0.h[7] // p4(top[3]) * filter(4)
-        mla             v3.8h,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
-        mla             v3.8h,   v21.8h,  v2.h[3] // p5(left[0]) * filter(5)
-        mla             v3.8h,   v22.8h,  v2.h[7] // p6(left[1]) * filter(6)
-        srshr           v3.8h,   v3.8h,   #4
-        smax            v3.8h,   v3.8h,   v30.8h
+        ldur            q0,  [x2, #2]             // top (0-7)
 .else
-        smull           v2.4s,   v17.4h,  v0.h[0] // p1(top[0]) * filter(1)
-        smlal           v2.4s,   v18.4h,  v0.h[1] // p2(top[1]) * filter(2)
-        smlal           v2.4s,   v19.4h,  v0.h[2] // p3(top[2]) * filter(3)
-        smlal           v2.4s,   v20.4h,  v0.h[3] // p4(top[3]) * filter(4)
-        smlal           v2.4s,   v16.4h,  v1.h[2] // p0(topleft) * filter(0)
-        smlal           v2.4s,   v21.4h,  v1.h[1] // p5(left[0]) * filter(5)
-        smlal           v2.4s,   v22.4h,  v1.h[0] // p6(left[1]) * filter(6)
-        smull2          v3.4s,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
-        smlal2          v3.4s,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
-        smlal2          v3.4s,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
-        smlal2          v3.4s,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
-        smlal2          v3.4s,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
-        smlal2          v3.4s,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
-        smlal2          v3.4s,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
-        smull           v4.4s,   v17.4h,  v0.h[4] // p1(top[0]) * filter(1)
-        smlal           v4.4s,   v18.4h,  v0.h[5] // p2(top[1]) * filter(2)
-        smlal           v4.4s,   v19.4h,  v0.h[6] // p3(top[2]) * filter(3)
-        sqrshrun        v2.4h,   v2.4s,   #4
-        sqrshrun2       v2.8h,   v3.4s,   #4
-        smin            v2.8h,   v2.8h,   v31.8h
-        smlal           v4.4s,   v20.4h,  v0.h[7] // p4(top[3]) * filter(4)
-        smlal           v4.4s,   v16.4h,  v0.h[3] // p0(topleft) * filter(0)
-        smlal           v4.4s,   v21.4h,  v2.h[3] // p5(left[0]) * filter(5)
-        smlal           v4.4s,   v22.4h,  v2.h[7] // p6(left[1]) * filter(6)
-        smull2          v5.4s,   v17.8h,  v0.h[4] // p1(top[0]) * filter(1)
-        smlal2          v5.4s,   v18.8h,  v0.h[5] // p2(top[1]) * filter(2)
-        smlal2          v5.4s,   v19.8h,  v0.h[6] // p3(top[2]) * filter(3)
-        smlal2          v5.4s,   v20.8h,  v0.h[7] // p4(top[3]) * filter(4)
-        smlal2          v5.4s,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
-        smlal2          v5.4s,   v21.8h,  v2.h[3] // p5(left[0]) * filter(5)
-        smlal2          v5.4s,   v22.8h,  v2.h[7] // p6(left[1]) * filter(6)
-        sqrshrun        v3.4h,   v4.4s,   #4
-        sqrshrun2       v3.8h,   v5.4s,   #4
+        ldur            d0,  [x2, #2]             // top (0-3)
+        ldur            d1,  [x2, #10]            // top (4-7)
 .endif
-        smin            v3.8h,   v3.8h,   v31.8h
+8:
+        ldr             d2,  [x2, #-4]!           // left (0-1) + topleft (2)
         subs            w4,  w4,  #2
-        st2             {v2.d, v3.d}[0], [x0], x1
-        zip2            v0.2d,   v2.2d,   v3.2d
-        st2             {v2.d, v3.d}[1], [x6], x1
+.if \bpc == 10
+        mul             v3.8h,   v16.8h,  v2.h[2] // p0(topleft) * filter(0)
+        mla             v3.8h,   v22.8h,  v2.h[0] // p6(left[1]) * filter(6)
+        mul             v5.8h,   v21.8h,  v2.h[1] // p5(left[0]) * filter(5)
+        mla             v5.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        mla             v5.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        mla             v3.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        mla             v3.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        mul             v4.8h,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
+        usqadd          v5.8h,   v3.8h
+        mul             v6.8h,   v17.8h,  v0.h[4] // p1(top[0]) * filter(1)
+        srshr           v3.8h,   v5.8h,   #4
+        mla             v4.8h,   v19.8h,  v0.h[6] // p3(top[2]) * filter(3)
+        smin            v3.8h,   v3.8h,   v31.8h
+        mla             v6.8h,   v18.8h,  v0.h[5] // p2(top[1]) * filter(2)
+        mla             v6.8h,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
+        mla             v4.8h,   v20.8h,  v0.h[7] // p4(top[3]) * filter(4)
+        mla             v4.8h,   v22.8h,  v3.h[7] // p6(left[1]) * filter(6)
+        usqadd          v6.8h,   v4.8h
+        srshr           v4.8h,   v6.8h,   #4
+        smin            v4.8h,   v4.8h,   v31.8h
+        zip2            v0.2d,   v3.2d,   v4.2d
+        st1             {v3.8b, v4.8b},  [x0], x1
+        st1             {v0.8h},         [x6], x1
+.else
+        smull           v3.4s,   v16.4h,  v2.h[2] // p0(topleft) * filter(0)
+        smlal           v3.4s,   v21.4h,  v2.h[1] // p5(left[0]) * filter(5)
+        smlal           v3.4s,   v22.4h,  v2.h[0] // p6(left[1]) * filter(6)
+        smlal           v3.4s,   v17.4h,  v0.h[0] // p1(top[0]) * filter(1)
+        smlal           v3.4s,   v18.4h,  v0.h[1] // p2(top[1]) * filter(2)
+        smlal           v3.4s,   v19.4h,  v0.h[2] // p3(top[2]) * filter(3)
+        smlal           v3.4s,   v20.4h,  v0.h[3] // p4(top[3]) * filter(4)
+        smull2          v5.4s,   v16.8h,  v2.h[2] // p0(topleft) * filter(0)
+        smlal2          v5.4s,   v21.8h,  v2.h[1] // p5(left[0]) * filter(5)
+        smlal2          v5.4s,   v22.8h,  v2.h[0] // p6(left[1]) * filter(6)
+        smlal2          v5.4s,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        smlal2          v5.4s,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        smlal2          v5.4s,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        smlal2          v5.4s,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        sqrshrun        v3.4h,   v3.4s,   #4
+        sqrshrun        v5.4h,   v5.4s,   #4
+        smull           v4.4s,   v16.4h,  v0.h[3] // p0(topleft) * filter(0)
+        smull2          v6.4s,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
+        smin            v3.4h,   v3.4h,   v31.4h
+        smin            v0.4h,   v5.4h,   v31.4h
+        smlal           v4.4s,   v17.4h,  v1.h[0] // p1(top[0]) * filter(1)
+        smlal           v4.4s,   v18.4h,  v1.h[1] // p2(top[1]) * filter(2)
+        smlal           v4.4s,   v19.4h,  v1.h[2] // p3(top[2]) * filter(3)
+        smlal           v4.4s,   v20.4h,  v1.h[3] // p4(top[3]) * filter(4)
+        smlal           v4.4s,   v21.4h,  v3.h[3] // p5(left[0]) * filter(5)
+        smlal           v4.4s,   v22.4h,  v0.h[3] // p6(left[1]) * filter(6)
+        smlal2          v6.4s,   v17.8h,  v1.h[0] // p1(top[0]) * filter(1)
+        smlal2          v6.4s,   v18.8h,  v1.h[1] // p2(top[1]) * filter(2)
+        smlal2          v6.4s,   v19.8h,  v1.h[2] // p3(top[2]) * filter(3)
+        smlal2          v6.4s,   v20.8h,  v1.h[3] // p4(top[3]) * filter(4)
+        smlal2          v6.4s,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
+        smlal2          v6.4s,   v22.8h,  v0.h[3] // p6(left[1]) * filter(6)
+        sqrshrun        v4.4h,   v4.4s,   #4
+        sqrshrun        v1.4h,   v6.4s,   #4
+        smin            v4.4h,   v4.4h,   v31.4h
+        smin            v1.4h,   v1.4h,   v31.4h
+        st1             {v3.8b, v4.8b},  [x0], x1
+        st1             {v0.8b, v1.8b},  [x6], x1
+.endif
         b.gt            8b
         ret
 160:
 320:
         AARCH64_VALID_JUMP_TARGET
-        add             x8,  x2,  #2
-        sub             x2,  x2,  #4
-        mov             x7,  #-4
-        sub             x1,  x1,  w3, uxtw #1
-        mov             w9,  w3
-
-1:
-        ld1             {v0.4h}, [x2], x7         // left (0-1) + topleft (2)
-2:
-        ld1             {v1.8h, v2.8h}, [x8], #32 // top(0-15)
+        // Indices for gathering the last top sample and two filtered
+        // samples into the left/topleft inputs for the next iteration.
 .if \bpc == 10
-        mul             v3.8h,   v16.8h,  v0.h[2] // p0(topleft) * filter(0)
-        mla             v3.8h,   v21.8h,  v0.h[1] // p5(left[0]) * filter(5)
-        mla             v3.8h,   v22.8h,  v0.h[0] // p6(left[1]) * filter(6)
-        mla             v3.8h,   v17.8h,  v1.h[0] // p1(top[0]) * filter(1)
-        mla             v3.8h,   v18.8h,  v1.h[1] // p2(top[1]) * filter(2)
-        mla             v3.8h,   v19.8h,  v1.h[2] // p3(top[2]) * filter(3)
-        mla             v3.8h,   v20.8h,  v1.h[3] // p4(top[3]) * filter(4)
-
-        mul             v4.8h,   v17.8h,  v1.h[4] // p1(top[0]) * filter(1)
-        mla             v4.8h,   v18.8h,  v1.h[5] // p2(top[1]) * filter(2)
-        mla             v4.8h,   v19.8h,  v1.h[6] // p3(top[2]) * filter(3)
-        srshr           v3.8h,   v3.8h,   #4
-        smax            v3.8h,   v3.8h,   v30.8h
-        smin            v3.8h,   v3.8h,   v31.8h
-        mla             v4.8h,   v20.8h,  v1.h[7] // p4(top[3]) * filter(4)
-        mla             v4.8h,   v16.8h,  v1.h[3] // p0(topleft) * filter(0)
-        mla             v4.8h,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
-        mla             v4.8h,   v22.8h,  v3.h[7] // p6(left[1]) * filter(6)
-
-        mul             v5.8h,   v17.8h,  v2.h[0] // p1(top[0]) * filter(1)
-        mla             v5.8h,   v18.8h,  v2.h[1] // p2(top[1]) * filter(2)
-        mla             v5.8h,   v19.8h,  v2.h[2] // p3(top[2]) * filter(3)
-        srshr           v4.8h,   v4.8h,   #4
-        smax            v4.8h,   v4.8h,   v30.8h
-        smin            v4.8h,   v4.8h,   v31.8h
-        mla             v5.8h,   v20.8h,  v2.h[3] // p4(top[3]) * filter(4)
-        mla             v5.8h,   v16.8h,  v1.h[7] // p0(topleft) * filter(0)
-        mla             v5.8h,   v21.8h,  v4.h[3] // p5(left[0]) * filter(5)
-        mla             v5.8h,   v22.8h,  v4.h[7] // p6(left[1]) * filter(6)
-
-        mul             v6.8h,   v17.8h,  v2.h[4] // p1(top[0]) * filter(1)
-        mla             v6.8h,   v18.8h,  v2.h[5] // p2(top[1]) * filter(2)
-        mla             v6.8h,   v19.8h,  v2.h[6] // p3(top[2]) * filter(3)
-        srshr           v5.8h,   v5.8h,   #4
-        smax            v5.8h,   v5.8h,   v30.8h
-        smin            v5.8h,   v5.8h,   v31.8h
-        mla             v6.8h,   v20.8h,  v2.h[7] // p4(top[3]) * filter(4)
-        mla             v6.8h,   v16.8h,  v2.h[3] // p0(topleft) * filter(0)
-        mla             v6.8h,   v21.8h,  v5.h[3] // p5(left[0]) * filter(5)
-        mla             v6.8h,   v22.8h,  v5.h[7] // p6(left[1]) * filter(6)
-
-        subs            w3,  w3,  #16
-        srshr           v6.8h,   v6.8h,   #4
-        smax            v6.8h,   v6.8h,   v30.8h
+        mov             w5,  #0x1F1E           // indices for v1.h[7] (2nd vector)
 .else
-        smull           v3.4s,   v16.4h,  v0.h[2] // p0(topleft) * filter(0)
-        smlal           v3.4s,   v21.4h,  v0.h[1] // p5(left[0]) * filter(5)
-        smlal           v3.4s,   v22.4h,  v0.h[0] // p6(left[1]) * filter(6)
-        smlal           v3.4s,   v17.4h,  v1.h[0] // p1(top[0]) * filter(1)
-        smlal           v3.4s,   v18.4h,  v1.h[1] // p2(top[1]) * filter(2)
-        smlal           v3.4s,   v19.4h,  v1.h[2] // p3(top[2]) * filter(3)
-        smlal           v3.4s,   v20.4h,  v1.h[3] // p4(top[3]) * filter(4)
-        smull2          v4.4s,   v16.8h,  v0.h[2] // p0(topleft) * filter(0)
-        smlal2          v4.4s,   v21.8h,  v0.h[1] // p5(left[0]) * filter(5)
-        smlal2          v4.4s,   v22.8h,  v0.h[0] // p6(left[1]) * filter(6)
-        smlal2          v4.4s,   v17.8h,  v1.h[0] // p1(top[0]) * filter(1)
-        smlal2          v4.4s,   v18.8h,  v1.h[1] // p2(top[1]) * filter(2)
-        smlal2          v4.4s,   v19.8h,  v1.h[2] // p3(top[2]) * filter(3)
-        smlal2          v4.4s,   v20.8h,  v1.h[3] // p4(top[3]) * filter(4)
-
-        smull           v5.4s,   v17.4h,  v1.h[4] // p1(top[0]) * filter(1)
-        smlal           v5.4s,   v18.4h,  v1.h[5] // p2(top[1]) * filter(2)
-        smlal           v5.4s,   v19.4h,  v1.h[6] // p3(top[2]) * filter(3)
-        sqrshrun        v3.4h,   v3.4s,   #4
-        sqrshrun2       v3.8h,   v4.4s,   #4
-        smin            v3.8h,   v3.8h,   v31.8h
-        smlal           v5.4s,   v20.4h,  v1.h[7] // p4(top[3]) * filter(4)
-        smlal           v5.4s,   v16.4h,  v1.h[3] // p0(topleft) * filter(0)
-        smlal           v5.4s,   v21.4h,  v3.h[3] // p5(left[0]) * filter(5)
-        smlal           v5.4s,   v22.4h,  v3.h[7] // p6(left[1]) * filter(6)
-        smull2          v6.4s,   v17.8h,  v1.h[4] // p1(top[0]) * filter(1)
-        smlal2          v6.4s,   v18.8h,  v1.h[5] // p2(top[1]) * filter(2)
-        smlal2          v6.4s,   v19.8h,  v1.h[6] // p3(top[2]) * filter(3)
-        smlal2          v6.4s,   v20.8h,  v1.h[7] // p4(top[3]) * filter(4)
-        smlal2          v6.4s,   v16.8h,  v1.h[3] // p0(topleft) * filter(0)
-        smlal2          v6.4s,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
-        smlal2          v6.4s,   v22.8h,  v3.h[7] // p6(left[1]) * filter(6)
-
-        smull           v24.4s,  v17.4h,  v2.h[0] // p1(top[0]) * filter(1)
-        smlal           v24.4s,  v18.4h,  v2.h[1] // p2(top[1]) * filter(2)
-        smlal           v24.4s,  v19.4h,  v2.h[2] // p3(top[2]) * filter(3)
-        sqrshrun        v4.4h,   v5.4s,   #4
-        sqrshrun2       v4.8h,   v6.4s,   #4
-        smin            v4.8h,   v4.8h,   v31.8h
-        smlal           v24.4s,  v20.4h,  v2.h[3] // p4(top[3]) * filter(4)
-        smlal           v24.4s,  v16.4h,  v1.h[7] // p0(topleft) * filter(0)
-        smlal           v24.4s,  v21.4h,  v4.h[3] // p5(left[0]) * filter(5)
-        smlal           v24.4s,  v22.4h,  v4.h[7] // p6(left[1]) * filter(6)
-        smull2          v25.4s,  v17.8h,  v2.h[0] // p1(top[0]) * filter(1)
-        smlal2          v25.4s,  v18.8h,  v2.h[1] // p2(top[1]) * filter(2)
-        smlal2          v25.4s,  v19.8h,  v2.h[2] // p3(top[2]) * filter(3)
-        smlal2          v25.4s,  v20.8h,  v2.h[3] // p4(top[3]) * filter(4)
-        smlal2          v25.4s,  v16.8h,  v1.h[7] // p0(topleft) * filter(0)
-        smlal2          v25.4s,  v21.8h,  v4.h[3] // p5(left[0]) * filter(5)
-        smlal2          v25.4s,  v22.8h,  v4.h[7] // p6(left[1]) * filter(6)
-
-        smull           v26.4s,  v17.4h,  v2.h[4] // p1(top[0]) * filter(1)
-        smlal           v26.4s,  v18.4h,  v2.h[5] // p2(top[1]) * filter(2)
-        smlal           v26.4s,  v19.4h,  v2.h[6] // p3(top[2]) * filter(3)
-        sqrshrun        v5.4h,   v24.4s,  #4
-        sqrshrun2       v5.8h,   v25.4s,  #4
-        smin            v5.8h,   v5.8h,   v31.8h
-        smlal           v26.4s,  v20.4h,  v2.h[7] // p4(top[3]) * filter(4)
-        smlal           v26.4s,  v16.4h,  v2.h[3] // p0(topleft) * filter(0)
-        smlal           v26.4s,  v21.4h,  v5.h[3] // p5(left[0]) * filter(5)
-        smlal           v26.4s,  v22.4h,  v5.h[7] // p6(left[1]) * filter(6)
-        smull2          v27.4s,  v17.8h,  v2.h[4] // p1(top[0]) * filter(1)
-        smlal2          v27.4s,  v18.8h,  v2.h[5] // p2(top[1]) * filter(2)
-        smlal2          v27.4s,  v19.8h,  v2.h[6] // p3(top[2]) * filter(3)
-        smlal2          v27.4s,  v20.8h,  v2.h[7] // p4(top[3]) * filter(4)
-        smlal2          v27.4s,  v16.8h,  v2.h[3] // p0(topleft) * filter(0)
-        smlal2          v27.4s,  v21.8h,  v5.h[3] // p5(left[0]) * filter(5)
-        smlal2          v27.4s,  v22.8h,  v5.h[7] // p6(left[1]) * filter(6)
-
-        subs            w3,  w3,  #16
-        sqrshrun        v6.4h,   v26.4s,  #4
-        sqrshrun2       v6.8h,   v27.4s,  #4
+        mov             w5,  #0x2726           // indices for v6.h[3] (3rd vector)
 .endif
-        smin            v6.8h,   v6.8h,   v31.8h
-
-        ins             v0.h[2], v2.h[7]
-        st4             {v3.d, v4.d, v5.d, v6.d}[0], [x0], #32
-        ins             v0.h[0], v6.h[7]
-        st4             {v3.d, v4.d, v5.d, v6.d}[1], [x6], #32
-        ins             v0.h[1], v6.h[3]
+        mov             w9,  w3
+        movk            x5,  #0x1716, lsl #16  // indices for v1.h[3] / v5.h[3] (2nd vector)
+        add             x8,  x2,  #2
+        movk            x5,  #0x0F0E, lsl #32  // indices for v0.h[7] / v4.h[7] (1st vector)
+        sub             x1,  x1,  x9, lsl #1
+        fmov            d7,  x5                // TBL2/3 indices for three 16-bit samples
+1:
+        ldr             d2,  [x2, #-4]!        // left (0-1) + topleft (2)
+2:
+.if \bpc == 10
+        ld1             {v0.8h},  [x8], #16    // top(0-15)
+        subs            w3,  w3,  #8
+        mul             v3.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        mla             v3.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        mul             v5.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        mla             v5.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        mla             v5.8h,   v21.8h,  v2.h[1] // p5(left[0]) * filter(5)
+        mla             v3.8h,   v16.8h,  v2.h[2] // p0(topleft) * filter(0)
+        mla             v3.8h,   v22.8h,  v2.h[0] // p6(left[1]) * filter(6)
+        mul             v1.8h,   v17.8h,  v0.h[4] // p1(top[0]) * filter(1)
+        usqadd          v5.8h,   v3.8h
+        mul             v6.8h,   v18.8h,  v0.h[5] // p2(top[1]) * filter(2)
+        srshr           v3.8h,   v5.8h,   #4
+        mla             v1.8h,   v19.8h,  v0.h[6] // p3(top[2]) * filter(3)
+        smin            v3.8h,   v3.8h,   v31.8h
+        mla             v6.8h,   v20.8h,  v0.h[7] // p4(top[3]) * filter(4)
+        mla             v6.8h,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
+        mla             v1.8h,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
+        mla             v1.8h,   v22.8h,  v3.h[7] // p6(left[1]) * filter(6)
+        usqadd          v6.8h,   v1.8h
+        srshr           v1.8h,   v6.8h,   #4
+        smin            v1.8h,   v1.8h,   v31.8h
+        zip2            v4.2d,   v3.2d,   v1.2d
+        tbl             v2.8b,   {v0.16b, v1.16b}, v7.8b // v1.h[7] v1.h[3] v0.h[7]
+        stp             d3,  d1,  [x0], #16
+        str             q4,  [x6], #16
+.else
+        ld1             {v4.8h},  [x8], #16    // top(0-15)
+        subs            w3,  w3,  #8
+        smull           v3.4s,   v17.4h,  v4.h[0] // p1(top[0]) * filter(1)
+        smlal           v3.4s,   v18.4h,  v4.h[1] // p2(top[1]) * filter(2)
+        smlal           v3.4s,   v19.4h,  v4.h[2] // p3(top[2]) * filter(3)
+        smlal           v3.4s,   v20.4h,  v4.h[3] // p4(top[3]) * filter(4)
+        smlal           v3.4s,   v16.4h,  v2.h[2] // p0(topleft) * filter(0)
+        smlal           v3.4s,   v21.4h,  v2.h[1] // p5(left[0]) * filter(5)
+        smlal           v3.4s,   v22.4h,  v2.h[0] // p6(left[1]) * filter(6)
+        smull           v5.4s,   v16.4h,  v4.h[3] // p0(topleft) * filter(0)
+        smull2          v0.4s,   v17.8h,  v4.h[0] // p1(top[0]) * filter(1)
+        smlal2          v0.4s,   v18.8h,  v4.h[1] // p2(top[1]) * filter(2)
+        smlal2          v0.4s,   v19.8h,  v4.h[2] // p3(top[2]) * filter(3)
+        smlal2          v0.4s,   v20.8h,  v4.h[3] // p4(top[3]) * filter(4)
+        smlal2          v0.4s,   v16.8h,  v2.h[2] // p0(topleft) * filter(0)
+        smlal2          v0.4s,   v21.8h,  v2.h[1] // p5(left[0]) * filter(5)
+        smlal2          v0.4s,   v22.8h,  v2.h[0] // p6(left[1]) * filter(6)
+        smull2          v6.4s,   v16.8h,  v4.h[3] // p0(topleft) * filter(0)
+        sqrshrun        v3.4h,   v3.4s,   #4
+        sqrshrun        v0.4h,   v0.4s,   #4
+        smlal           v5.4s,   v17.4h,  v4.h[4] // p1(top[0]) * filter(1)
+        smlal2          v6.4s,   v17.8h,  v4.h[4] // p1(top[0]) * filter(1)
+        smin            v3.4h,   v3.4h,   v31.4h
+        smin            v0.4h,   v0.4h,   v31.4h
+        smlal           v5.4s,   v18.4h,  v4.h[5] // p2(top[1]) * filter(2)
+        smlal           v5.4s,   v19.4h,  v4.h[6] // p3(top[2]) * filter(3)
+        smlal           v5.4s,   v20.4h,  v4.h[7] // p4(top[3]) * filter(4)
+        smlal           v5.4s,   v21.4h,  v3.h[3] // p5(left[0]) * filter(5)
+        smlal           v5.4s,   v22.4h,  v0.h[3] // p6(left[1]) * filter(6)
+        smlal2          v6.4s,   v18.8h,  v4.h[5] // p2(top[1]) * filter(2)
+        smlal2          v6.4s,   v19.8h,  v4.h[6] // p3(top[2]) * filter(3)
+        smlal2          v6.4s,   v20.8h,  v4.h[7] // p4(top[3]) * filter(4)
+        smlal2          v6.4s,   v21.8h,  v3.h[3] // p5(left[0]) * filter(5)
+        smlal2          v6.4s,   v22.8h,  v0.h[3] // p6(left[1]) * filter(6)
+        sqrshrun        v5.4h,   v5.4s,   #4
+        sqrshrun        v6.4h,   v6.4s,   #4
+        smin            v5.4h,   v5.4h,   v31.4h
+        smin            v6.4h,   v6.4h,   v31.4h
+        stp             d3,  d5,  [x0], #16
+        stp             d0,  d6,  [x6], #16
+        tbl             v2.8b,   {v4.16b, v5.16b, v6.16b}, v7.8b // v6.h[3] v5.h[3] v4.h[7]
+.endif
         b.gt            2b
         subs            w4,  w4,  #2
         b.le            9f
-        sub             x8,  x6,  w9, uxtw #1
+        sub             x8,  x6,  x9, lsl #1
         add             x0,  x0,  x1
         add             x6,  x6,  x1
         mov             w3,  w9
