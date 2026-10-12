@@ -36,12 +36,9 @@
 #define SUB_GRAIN_HEIGHT 38
 
 .macro increment_seed steps, shift=1
-        lsr             w11, w2,  #3
-        lsr             w12, w2,  #12
-        lsr             w13, w2,  #1
-        eor             w11, w2,  w11                     // (r >> 0) ^ (r >> 3)
-        eor             w12, w12, w13                     // (r >> 12) ^ (r >> 1)
-        eor             w11, w11, w12                     // (r >> 0) ^ (r >> 3) ^ (r >> 12) ^ (r >> 1)
+        eor             w11, w2,  w2,  lsr #3             // (r >> 0) ^ (r >> 3)
+        eor             w12, w2,  w2,  lsr #11            // (r >> 0) ^ (r >> 11)
+        eor             w11, w11, w12, lsr #1             // (r >> 0) ^ (r >> 3) ^ (r >> 1) ^ (r >> 12)
 .if \shift
         lsr             w2,  w2,  #\steps
 .endif
@@ -71,9 +68,8 @@ function get_gaussian_neon
         increment_seed  4
         read_rand       x14, 11,  3
         read_rand       x15, 11,  2
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         read_rand       x14, 11,  1
         ld1             {v0.h}[1], [x15]
         add             x14, x3,  x14, lsl #1
@@ -98,19 +94,19 @@ function get_gaussian_neon
 endfunc
 
 .macro store_grain_row r0, r1, r2, r3, r4, r5
-        st1             {\r0\().16b,\r1\().16b}, [x0], #32
-        st1             {\r2\().16b,\r3\().16b}, [x0], #32
-        st1             {\r4\().16b},  [x0], #16
-        st1             {\r5\().h}[0], [x0], #2
+        stp             q(\r0), q(\r1), [x0]
+        stp             q(\r2), q(\r3), [x0, #32]
+        str             q(\r4), [x0, #64]
+        str             h(\r5), [x0, #80]
+        add             x0,  x0,  #82
 .endm
 
 function get_grain_2_neon
         increment_seed  2
         read_rand       x14, 11,  1
         read_rand       x15, 11,  0
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         ld1             {v0.h}[1], [x15]
         srshl           v0.4h,   v0.4h,   v31.4h
         ret
@@ -127,9 +123,8 @@ function get_grain_4_neon
         increment_seed  4
         read_rand       x14, 11,  3
         read_rand       x15, 11,  2
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         read_rand       x14, 11,  1
         ld1             {v0.h}[1], [x15]
         add             x14, x3,  x14, lsl #1
@@ -156,7 +151,7 @@ endfunc
 function output_lag\n\()_neon
 1:
         read_shift_rand x13, 11
-        mov             w11, v1.s[0]
+        fmov            w11, s1
         ldrsh           w12, [x3, x13, lsl #1]
         ext             v0.16b,  v0.16b,  v0.16b,  #2
 .if \n == 1
@@ -291,8 +286,7 @@ sum_\lag\()_\type\()_\edge\()_start:
         mov             w15, #3
         bl              output_\lag\()_neon
         read_shift_rand x15, 11
-        add             x15, x3,  x15, lsl #1
-        ld1             {v1.h}[0], [x15]
+        ldr             h1,  [x3, x15, lsl #1]
         srshl           v1.4h,   v1.4h,   v31.4h
         ext             v0.16b,  v0.16b,  v1.16b,  #2
 .else
@@ -310,10 +304,9 @@ sum_\lag\()_\type\()_\edge\()_start:
         read_rand       x12, 11,  2
         read_rand       x13, 11,  1
         read_rand       x14, 11,  0
-        add             x12, x3,  x12, lsl #1
         add             x13, x3,  x13, lsl #1
         add             x14, x3,  x14, lsl #1
-        ld1             {v1.h}[0], [x12]
+        ldr             h1,  [x3, x12, lsl #1]
         ld1             {v1.h}[1], [x13]
         ld1             {v1.h}[2], [x14]
         srshl           v1.4h,   v1.4h,   v31.4h
@@ -615,7 +608,7 @@ function generate_grain_rows_neon
         b.gt            2b
         get_grain_2     v0
         subs            w1,  w1,  #1
-        st1             {v0.s}[0], [x0], #4
+        str             s0,  [x0], #4
         b.gt            1b
         ldr             x30, [sp], #16
         AARCH64_VALIDATE_LINK_REGISTER
@@ -740,7 +733,7 @@ function generate_grain_\type\()_16bpc_neon, export=1
         movrel          x16, gen_grain_\type\()_tbl
         ldr             w17, [x1, #FGD_AR_COEFF_LAG]
         add             w9,  w9,  #4
-        ldrsw           x17, [x16, w17, uxtw #2]
+        ldrsw           x17, [x16, x17, lsl #2]
         dup             v31.8h,  w9    // 4 - bitdepth_min_8 + data->grain_scale_shift
         add             x16, x16, x17
         neg             v31.8h,  v31.8h
@@ -749,7 +742,7 @@ function generate_grain_\type\()_16bpc_neon, export=1
         cmp             w13, #0
         mov             w11, #0x49d8
         mov             w14, #0xb524
-        add             x4,  x4,  w13, uxtw // Add offset to ar_coeffs_uv[1]
+        add             x4,  x4,  x13       // Add offset to ar_coeffs_uv[1]
         csel            w11, w11, w14, ne
 .endif
 
@@ -809,7 +802,7 @@ L(generate_grain_\type\()_lag0):
         get_grain_2     v16
         subs            w1,  w1,  #1
         add             x19, x19, #4
-        st1             {v16.s}[0], [x0], #4
+        str             s16, [x0], #4
         b.gt            1b
 .endif
         ldp             x30, x19, [sp], #96
@@ -857,7 +850,7 @@ L(generate_grain_\type\()_lag1):
 .ifc \type, uv_444
         add             x19, x19, #4
 .endif
-        st1             {v16.s}[0], [x0], #4
+        str             s16, [x0], #4
         b.gt            1b
 
         ldp             x30, x19, [sp], #96
@@ -891,7 +884,7 @@ L(generate_grain_\type\()_lag2):
 .ifc \type, uv_444
         add             x19, x19, #4
 .endif
-        st1             {v16.s}[0], [x0], #4
+        str             s16, [x0], #4
         b.gt            1b
 
         ldp             x30, x19, [sp], #96
@@ -931,7 +924,7 @@ L(generate_grain_\type\()_lag3):
 .ifc \type, uv_444
         add             x19, x19, #4
 .endif
-        st1             {v16.s}[0], [x0], #4
+        str             s16, [x0], #4
         b.gt            1b
 
         ldp             x20, x21, [sp, #80]
@@ -992,7 +985,7 @@ function generate_grain_\type\()_16bpc_neon, export=1
         movrel          x16, gen_grain_\type\()_tbl
         ldr             w17, [x1, #FGD_AR_COEFF_LAG]
         add             w9,  w9,  #4
-        ldrsw           x17, [x16, w17, uxtw #2]
+        ldrsw           x17, [x16, x17, lsl #2]
         dup             v31.8h,  w9    // 4 - bitdepth_min_8 + data->grain_scale_shift
         add             x16, x16, x17
         neg             v31.8h,  v31.8h
@@ -1000,7 +993,7 @@ function generate_grain_\type\()_16bpc_neon, export=1
         cmp             w13, #0
         mov             w11, #0x49d8
         mov             w14, #0xb524
-        add             x4,  x4,  w13, uxtw // Add offset to ar_coeffs_uv[1]
+        add             x4,  x4,  x13       // Add offset to ar_coeffs_uv[1]
         csel            w11, w11, w14, ne
 
         ldr             w7,  [x1, #FGD_AR_COEFF_SHIFT]
@@ -1359,7 +1352,7 @@ endconst
 
 .macro add_offset dst, offx, offy, src, stride
         madd            \dst, \stride, \offy, \src // grain_lut += grain_stride * offy
-        add             \dst, \dst, \offx, uxtw #1 // grain_lut += offx
+        add             \dst, \dst, \offx, lsl #1  // grain_lut += offx
 .endm
 
 // void dav1d_fgy_32x32_16bpc_neon(pixel *const dst, const pixel *const src,
@@ -1423,10 +1416,10 @@ function fgy_32x32_16bpc_neon, export=1
         calc_offset     w15, w16, w15, 0,  0
         calc_offset     w6,  w10, w6,  0,  0
 
-        add_offset      x12, w11, x12, x5,  x9
-        add_offset      x14, w13, x14, x5,  x9
-        add_offset      x16, w15, x16, x5,  x9
-        add_offset      x5,  w6,  x10, x5,  x9
+        add_offset      x12, x11, x12, x5,  x9
+        add_offset      x14, x13, x14, x5,  x9
+        add_offset      x16, x15, x16, x5,  x9
+        add_offset      x5,  x6,  x10, x5,  x9
 
         ldr             w11, [sp, #88]         // type
         movrel          x13, fgy_loop_tbl
@@ -1435,7 +1428,7 @@ function fgy_32x32_16bpc_neon, export=1
         add             x6,  x14, x9,  lsl #5  // grain_lut += grain_stride * FG_BLOCK_SIZE * by
 
         tst             w11, #1
-        ldrsw           x11, [x13, w11, uxtw #2]
+        ldrsw           x11, [x13, x11, lsl #2]
 
         add             x8,  x16, x9,  lsl #5  // grain_lut += grain_stride * FG_BLOCK_SIZE * by
         add             x8,  x8,  #32*2        // grain_lut += FG_BLOCK_SIZE * bx
@@ -1700,10 +1693,10 @@ function fguv_32x32_\layout\()_16bpc_neon, export=1
         calc_offset     w16, w17, w16, \sx, \sy
         calc_offset     w8,  w11, w8,  \sx, \sy
 
-        add_offset      x13, w12, x13, x5,  x10
-        add_offset      x15, w14, x15, x5,  x10
-        add_offset      x17, w16, x17, x5,  x10
-        add_offset      x5,  w8,  x11, x5,  x10
+        add_offset      x13, x12, x13, x5,  x10
+        add_offset      x15, x14, x15, x5,  x10
+        add_offset      x17, x16, x17, x5,  x10
+        add_offset      x5,  x8,  x11, x5,  x10
 
         add             x4,  x13, #2*(32 >> \sx)      // grain_lut += FG_BLOCK_SIZE * bx
         add             x8,  x15, x10, lsl #(5 - \sy) // grain_lut += grain_stride * FG_BLOCK_SIZE * by
@@ -1717,7 +1710,7 @@ function fguv_32x32_\layout\()_16bpc_neon, export=1
 
         ld1             {v27.4h, v28.4h}, [x16] // overlap_coeffs
         tst             w13, #1
-        ldrsw           x13, [x14, w13, uxtw #2]
+        ldrsw           x13, [x14, x13, lsl #2]
 
         b.eq            1f
         // y overlap
@@ -2023,10 +2016,11 @@ L(fguv_loop_sx1_csfl\csfl\()_\ox\oy):
 .if \ox && !\oy
         ins             v16.d[0], v18.d[0]
 .endif
+        movi            v4.8h,   #0
         addp            v0.8h,   v0.8h,   v1.8h
         addp            v1.8h,   v2.8h,   v3.8h
-        urshr           v0.8h,   v0.8h,   #1
-        urshr           v1.8h,   v1.8h,   #1
+        urhadd          v0.8h,   v0.8h,   v4.8h
+        urhadd          v1.8h,   v1.8h,   v4.8h
 .if !\csfl
         smull           v2.4s,   v0.4h,   v8.4h
         smull2          v3.4s,   v0.8h,   v8.8h
@@ -2040,13 +2034,13 @@ L(fguv_loop_sx1_csfl\csfl\()_\ox\oy):
         shrn2           v2.8h,   v3.4s,   #6
         shrn            v3.4h,   v0.4s,   #6
         shrn2           v3.8h,   v1.4s,   #6
+
         add             v0.8h,   v2.8h,   v24.8h
         add             v1.8h,   v3.8h,   v24.8h
-        movi            v2.8h,   #0
         smin            v0.8h,   v0.8h,   v23.8h
         smin            v1.8h,   v1.8h,   v23.8h
-        smax            v0.8h,   v0.8h,   v2.8h
-        smax            v1.8h,   v1.8h,   v2.8h
+        smax            v0.8h,   v0.8h,   v4.8h
+        smax            v1.8h,   v1.8h,   v4.8h
 .else
         // Make sure that uninitialized pixels out of range past the right
         // edge are in range; their actual values shouldn't matter.
