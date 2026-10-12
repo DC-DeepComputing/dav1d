@@ -1286,49 +1286,173 @@ endjumptable
 gen_grain_44 uv_420
 gen_grain_44 uv_422
 
-.macro gather_interleaved dst1, dst2, src1, src2, off
-        umov            w14, \src1[0+\off]
-        umov            w15, \src2[8+\off]
-        umov            w16, \src1[2+\off]
-        add             x14, x14, x3
-        umov            w17, \src2[10+\off]
-        add             x15, x15, x3
-        ld1             {\dst1}[0+\off],  [x14]
-        umov            w14, \src1[4+\off]
-        add             x16, x16, x3
-        ld1             {\dst2}[8+\off],  [x15]
-        umov            w15, \src2[12+\off]
-        add             x17, x17, x3
-        ld1             {\dst1}[2+\off],  [x16]
-        umov            w16, \src1[6+\off]
-        add             x14, x14, x3
-        ld1             {\dst2}[10+\off], [x17]
-        umov            w17, \src2[14+\off]
-        add             x15, x15, x3
-        ld1             {\dst1}[4+\off],  [x14]
-        add             x16, x16, x3
-        ld1             {\dst2}[12+\off], [x15]
-        add             x17, x17, x3
-        ld1             {\dst1}[6+\off],  [x16]
-        ld1             {\dst2}[14+\off], [x17]
-.endm
-
-.macro gather dst1, dst2, src1, src2
-        gather_interleaved \dst1, \dst2, \src1, \src2, 0
-        gather_interleaved \dst2, \dst1, \src2, \src1, 0
-        gather_interleaved \dst1, \dst2, \src1, \src2, 1
-        gather_interleaved \dst2, \dst1, \src2, \src1, 1
-.endm
-
 function gather32_neon
-        gather          v4.b, v5.b, v0.b, v1.b
+        fmov            w17, s0
+        ubfx            x14, x17, #0,  #8
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v0.s[1]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v0.s[2]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w14, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        orr             x13, x13, x14, lsl #32
+
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        fmov            d2,  x13
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v0.s[3]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w13, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        fmov            w14, s1
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w17, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        orr             x13, x13, x17, lsl #32
+
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        fmov            d3,  x13
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v1.s[1]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w13, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v1.s[2]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w16, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        orr             x13, x13, x16, lsl #32
+
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        fmov            d4,  x13
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v1.s[3]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        orr             w14, w17, w14, lsl #8
+        orr             w14, w15, w14, lsl #16
+        orr             x13, x13, x14, lsl #32
+        fmov            d5,  x13
+
         ret
 endfunc
 
 function gather16_neon
-        gather_interleaved v4.b, v5.b, v0.b, v0.b, 0
-        gather_interleaved v4.b, v5.b, v0.b, v0.b, 1
-        ins             v4.d[1], v5.d[1]
+        fmov            w17, s0
+        ubfx            x14, x17, #0,  #8
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v0.s[1]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v0.s[2]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w14, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        orr             x13, x13, x14, lsl #32
+
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        fmov            d4,  x13
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v0.s[3]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w13, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        orr             w17, w16, w17, lsl #8
+        orr             w17, w15, w17, lsl #16
+        orr             x13, x13, x17, lsl #32
+        fmov            d5,  x13
+
         ret
 endfunc
 
@@ -1505,10 +1629,10 @@ L(loop_\ox\oy):
         sxtl2           v19.8h,  v19.16b
 .endif
 
-        uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
-        uxtl            v4.8h,   v5.8b
-        uxtl2           v5.8h,   v5.16b
+        uxtl            v2.8h,   v2.8b   // scaling
+        uxtl            v3.8h,   v3.8b
+        uxtl            v4.8h,   v4.8b
+        uxtl            v5.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
@@ -1792,10 +1916,10 @@ L(fguv_loop_sx0_csfl\csfl\()_\ox\oy):
         sxtl2           v19.8h,  v19.16b
 .endif
 
-        uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
-        uxtl            v4.8h,   v5.8b
-        uxtl2           v5.8h,   v5.16b
+        uxtl            v2.8h,   v2.8b   // scaling
+        uxtl            v3.8h,   v3.8b
+        uxtl            v4.8h,   v4.8b
+        uxtl            v5.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
@@ -1951,7 +2075,7 @@ L(fguv_loop_sx1_csfl\csfl\()_\ox\oy):
 .endif
 
         uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
+        uxtl            v3.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
