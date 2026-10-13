@@ -38,6 +38,8 @@ decl_splat_mv_fn(dav1d_splat_mv_sse2);
 decl_splat_mv_fn(dav1d_splat_mv_avx2);
 decl_splat_mv_fn(dav1d_splat_mv_avx512icl);
 
+decl_load_tmvs_fn(dav1d_load_tmvs_avx2);
+
 static ALWAYS_INLINE void refmvs_dsp_init_x86(Dav1dRefmvsDSPContext *const c) {
     const unsigned flags = dav1d_get_cpu_flags();
 
@@ -57,6 +59,7 @@ static ALWAYS_INLINE void refmvs_dsp_init_x86(Dav1dRefmvsDSPContext *const c) {
 
     c->save_tmvs = dav1d_save_tmvs_avx2;
     c->splat_mv = dav1d_splat_mv_avx2;
+    c->load_tmvs = dav1d_load_tmvs_avx2;
 
     if (!(flags & DAV1D_X86_CPU_FLAG_AVX512ICL)) return;
 
