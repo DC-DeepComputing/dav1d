@@ -170,6 +170,27 @@ static ALWAYS_INLINE void itx_dsp_init_x86(Dav1dInvTxfmDSPContext *const c,
     assign_itx1_fn (R, 64, 32, ssse3);
     assign_itx1_fn ( , 64, 64, ssse3);
     *all_simd = 1;
+#elif ARCH_X86_64
+    if (bpc == 10) {
+        assign_itx16_fn(R,  4,  8, ssse3);
+        assign_itx16_fn(R,  4, 16, ssse3);
+        assign_itx16_fn(R,  8,  4, ssse3);
+        assign_itx16_fn(,   8,  8, ssse3);
+        assign_itx16_fn(R,  8, 16, ssse3);
+        assign_itx16_fn(R, 16,  4, ssse3);
+        assign_itx16_fn(R, 16,  8, ssse3);
+        assign_itx12_fn(,  16, 16, ssse3);
+        assign_itx2_fn (R,  8, 32, ssse3);
+        assign_itx2_fn (R, 32,  8, ssse3);
+        assign_itx2_fn (R, 16, 32, ssse3);
+        assign_itx2_fn (R, 32, 16, ssse3);
+        assign_itx2_fn (,  32, 32, ssse3);
+        assign_itx1_fn (R, 16, 64, ssse3);
+        assign_itx1_fn (R, 32, 64, ssse3);
+        assign_itx1_fn (R, 64, 16, ssse3);
+        assign_itx1_fn (R, 64, 32, ssse3);
+        assign_itx1_fn (,  64, 64, ssse3);
+    }
 #endif
 
     if (!(flags & DAV1D_X86_CPU_FLAG_SSE41)) return;
