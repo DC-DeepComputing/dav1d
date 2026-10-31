@@ -39,6 +39,11 @@
 #include "output/output.h"
 #include "output/muxer.h"
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 struct MuxerContext {
     MuxerPriv *data;
     const Muxer *impl;
@@ -140,6 +145,11 @@ int output_open(MuxerContext **const c_out,
         have_num_pattern = *ptr == 'n';
     }
     c->one_file_per_frame = name_offset || (!name && have_num_pattern);
+
+#ifdef _WIN32
+    if (impl != muxers[0] && !strcmp(filename, "-"))
+        _setmode(_fileno(stdout), _O_BINARY);
+#endif
 
     if (c->one_file_per_frame) {
         c->fps[0] = fps[0];
