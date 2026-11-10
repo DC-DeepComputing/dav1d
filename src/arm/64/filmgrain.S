@@ -36,12 +36,9 @@
 #define SUB_GRAIN_HEIGHT 38
 
 .macro increment_seed steps, shift=1
-        lsr             w11, w2,  #3
-        lsr             w12, w2,  #12
-        lsr             w13, w2,  #1
-        eor             w11, w2,  w11                     // (r >> 0) ^ (r >> 3)
-        eor             w12, w12, w13                     // (r >> 12) ^ (r >> 1)
-        eor             w11, w11, w12                     // (r >> 0) ^ (r >> 3) ^ (r >> 12) ^ (r >> 1)
+        eor             w11, w2,  w2,  lsr #3             // (r >> 0) ^ (r >> 3)
+        eor             w12, w2,  w2,  lsr #11            // (r >> 0) ^ (r >> 11)
+        eor             w11, w11, w12, lsr #1             // (r >> 0) ^ (r >> 3) ^ (r >> 1) ^ (r >> 12)
 .if \shift
         lsr             w2,  w2,  #\steps
 .endif
@@ -71,9 +68,8 @@ function get_gaussian_neon
         increment_seed  4
         read_rand       x14, 11,  3
         read_rand       x15, 11,  2
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         read_rand       x14, 11,  1
         ld1             {v0.h}[1], [x15]
         add             x14, x3,  x14, lsl #1
@@ -99,76 +95,67 @@ endfunc
 
 .macro get_grain_row r0, r1, r2, r3, r4, r5
         bl              get_gaussian_neon
-        srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn             \r0\().8b,  \r5\().8h
+        srshl           \r0\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn2            \r0\().16b, \r5\().8h
+        uzp1            \r0\().16b, \r0\().16b, \r5\().16b
+        bl              get_gaussian_neon
+        srshl           \r1\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn             \r1\().8b,  \r5\().8h
+        uzp1            \r1\().16b, \r1\().16b, \r5\().16b
+        bl              get_gaussian_neon
+        srshl           \r2\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn2            \r1\().16b, \r5\().8h
+        uzp1            \r2\().16b, \r2\().16b, \r5\().16b
+        bl              get_gaussian_neon
+        srshl           \r3\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn             \r2\().8b,  \r5\().8h
+        uzp1            \r3\().16b, \r3\().16b, \r5\().16b
+        bl              get_gaussian_neon
+        srshl           \r4\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn2            \r2\().16b, \r5\().8h
-        bl              get_gaussian_neon
-        srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn             \r3\().8b,  \r5\().8h
-        bl              get_gaussian_neon
-        srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn2            \r3\().16b, \r5\().8h
-        bl              get_gaussian_neon
-        srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn             \r4\().8b,  \r5\().8h
-        bl              get_gaussian_neon
-        srshl           \r5\().8h,  v0.8h,  v31.8h
-        xtn2            \r4\().16b, \r5\().8h
+        uzp1            \r4\().16b, \r4\().16b, \r5\().16b
         increment_seed  2
         read_rand       x14, 11,  1
         read_rand       x15, 11,  0
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {\r5\().h}[0], [x14]
+        ldr             h(\r5), [x3, x14, lsl #1]
         ld1             {\r5\().h}[1], [x15]
         srshl           v0.4h,      \r5\().4h,  v31.4h
         xtn             \r5\().8b,  v0.8h
 .endm
 
 .macro store_grain_row r0, r1, r2, r3, r4, r5
-        st1             {\r0\().16b,\r1\().16b}, [x0], #32
-        st1             {\r2\().16b,\r3\().16b}, [x0], #32
-        st1             {\r4\().16b},  [x0], #16
-        st1             {\r5\().h}[0], [x0], #2
+        stp             q(\r0), q(\r1), [x0]
+        stp             q(\r2), q(\r3), [x0, #32]
+        str             q(\r4), [x0, #64]
+        str             h(\r5), [x0, #80]
+        add             x0,  x0,  #82
 .endm
 
 .macro get_grain_row_44 r0, r1, r2
         bl              get_gaussian_neon
-        srshl           \r2\().8h,  v0.8h,  v31.8h
-        xtn             \r0\().8b,  \r2\().8h
+        srshl           \r0\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r2\().8h,  v0.8h,  v31.8h
-        xtn2            \r0\().16b, \r2\().8h
+        uzp1            \r0\().16b, \r0\().16b, \r2\().16b
+        bl              get_gaussian_neon
+        srshl           \r1\().8h,  v0.8h,  v31.8h
         bl              get_gaussian_neon
         srshl           \r2\().8h,  v0.8h,  v31.8h
-        xtn             \r1\().8b,  \r2\().8h
+        uzp1            \r1\().16b, \r1\().16b, \r2\().16b
         bl              get_gaussian_neon
         srshl           \r2\().8h,  v0.8h,  v31.8h
-        xtn2            \r1\().16b, \r2\().8h
-        bl              get_gaussian_neon
-        srshl           \r2\().8h,  v0.8h,  v31.8h
-        xtn             \r2\().8b,  \r2\().8h
 
         increment_seed  4
         read_rand       x14, 11,  3
         read_rand       x15, 11,  2
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         read_rand       x14, 11,  1
         ld1             {v0.h}[1], [x15]
         read_rand       x15, 11,  0
@@ -177,7 +164,7 @@ endfunc
         ld1             {v0.h}[2], [x14]
         ld1             {v0.h}[3], [x15]
         srshl           v0.4h,      v0.4h,  v31.4h
-        xtn2            \r2\().16b, v0.8h
+        uzp1            \r2\().16b, \r2\().16b, v0.16b
 .endm
 
 .macro store_grain_row_44 r0, r1, r2
@@ -190,9 +177,8 @@ function get_grain_2_neon
         increment_seed  2
         read_rand       x14, 11,  1
         read_rand       x15, 11,  0
-        add             x14, x3,  x14, lsl #1
         add             x15, x3,  x15, lsl #1
-        ld1             {v0.h}[0], [x14]
+        ldr             h0,  [x3, x14, lsl #1]
         ld1             {v0.h}[1], [x15]
         srshl           v0.4h,   v0.4h,   v31.4h
         xtn             v0.8b,   v0.8h
@@ -214,7 +200,7 @@ endfunc
 function output_lag\n\()_neon
 1:
         read_shift_rand x13, 11
-        mov             w11, v1.s[0]
+        fmov            w11, s1
         ldrsh           w12, [x3, x13, lsl #1]
         ext             v0.16b,  v0.16b,  v0.16b,  #1
 .if \n == 1
@@ -365,10 +351,9 @@ sum_\lag\()_\type\()_\edge\()_start:
         read_rand       x12, 11,  2
         read_rand       x13, 11,  1
         read_rand       x14, 11,  0
-        add             x12, x3,  x12, lsl #1
         add             x13, x3,  x13, lsl #1
         add             x14, x3,  x14, lsl #1
-        ld1             {v1.h}[0], [x12]
+        ldr             h1,  [x3, x12, lsl #1]
         ld1             {v1.h}[1], [x13]
         ld1             {v1.h}[2], [x14]
         srshl           v1.4h,   v1.4h,   v31.4h
@@ -385,8 +370,7 @@ sum_\lag\()_\type\()_\edge\()_start:
         mov             w15, #3
         bl              output_\lag\()_neon
         read_shift_rand x15, 11
-        add             x15, x3,  x15, lsl #1
-        ld1             {v1.h}[0], [x15]
+        ldr             h1,  [x3, x15, lsl #1]
         srshl           v1.4h,   v1.4h,   v31.4h
         ext             v0.16b,  v0.16b,  v1.16b,  #1
 .else
@@ -887,7 +871,7 @@ function generate_grain_\type\()_8bpc_neon, export=1
         movrel          x16, gen_grain_\type\()_tbl
         ldr             w17, [x1, #FGD_AR_COEFF_LAG]
         add             w9,  w9,  #4
-        ldrsw           x17, [x16, w17, uxtw #2]
+        ldrsw           x17, [x16, x17, lsl #2]
         dup             v31.8h,  w9    // 4 + data->grain_scale_shift
         add             x16, x16, x17
         neg             v31.8h,  v31.8h
@@ -896,7 +880,7 @@ function generate_grain_\type\()_8bpc_neon, export=1
         cmp             w13, #0
         mov             w11, #0x49d8
         mov             w14, #0xb524
-        add             x4,  x4,  w13, uxtw // Add offset to ar_coeffs_uv[1]
+        add             x4,  x4,  x13       // Add offset to ar_coeffs_uv[1]
         csel            w11, w11, w14, ne
 .endif
 
@@ -1029,7 +1013,7 @@ L(generate_grain_\type\()_lag2):
 .ifc \type, uv_444
         add             x19, x19, #2
 .endif
-        st1             {v16.h}[0], [x0], #2
+        str             h16, [x0], #2
         b.gt            1b
 
         ldp             x30, x19, [sp], #96
@@ -1064,7 +1048,7 @@ L(generate_grain_\type\()_lag3):
 .ifc \type, uv_444
         add             x19, x19, #2
 .endif
-        st1             {v16.h}[0], [x0], #2
+        str             h16, [x0], #2
         b.gt            1b
 
         ldp             x20, x21, [sp, #80]
@@ -1122,7 +1106,7 @@ function generate_grain_\type\()_8bpc_neon, export=1
         movrel          x16, gen_grain_\type\()_tbl
         ldr             w17, [x1, #FGD_AR_COEFF_LAG]
         add             w9,  w9,  #4
-        ldrsw           x17, [x16, w17, uxtw #2]
+        ldrsw           x17, [x16, x17, lsl #2]
         dup             v31.8h,  w9    // 4 + data->grain_scale_shift
         add             x16, x16, x17
         neg             v31.8h,  v31.8h
@@ -1130,7 +1114,7 @@ function generate_grain_\type\()_8bpc_neon, export=1
         cmp             w13, #0
         mov             w11, #0x49d8
         mov             w14, #0xb524
-        add             x4,  x4,  w13, uxtw // Add offset to ar_coeffs_uv[1]
+        add             x4,  x4,  x13       // Add offset to ar_coeffs_uv[1]
         csel            w11, w11, w14, ne
 
         ldr             w7,  [x1, #FGD_AR_COEFF_SHIFT]
@@ -1286,49 +1270,173 @@ endjumptable
 gen_grain_44 uv_420
 gen_grain_44 uv_422
 
-.macro gather_interleaved dst1, dst2, src1, src2, off
-        umov            w14, \src1[0+\off]
-        umov            w15, \src2[8+\off]
-        umov            w16, \src1[2+\off]
-        add             x14, x14, x3
-        umov            w17, \src2[10+\off]
-        add             x15, x15, x3
-        ld1             {\dst1}[0+\off],  [x14]
-        umov            w14, \src1[4+\off]
-        add             x16, x16, x3
-        ld1             {\dst2}[8+\off],  [x15]
-        umov            w15, \src2[12+\off]
-        add             x17, x17, x3
-        ld1             {\dst1}[2+\off],  [x16]
-        umov            w16, \src1[6+\off]
-        add             x14, x14, x3
-        ld1             {\dst2}[10+\off], [x17]
-        umov            w17, \src2[14+\off]
-        add             x15, x15, x3
-        ld1             {\dst1}[4+\off],  [x14]
-        add             x16, x16, x3
-        ld1             {\dst2}[12+\off], [x15]
-        add             x17, x17, x3
-        ld1             {\dst1}[6+\off],  [x16]
-        ld1             {\dst2}[14+\off], [x17]
-.endm
-
-.macro gather dst1, dst2, src1, src2
-        gather_interleaved \dst1, \dst2, \src1, \src2, 0
-        gather_interleaved \dst2, \dst1, \src2, \src1, 0
-        gather_interleaved \dst1, \dst2, \src1, \src2, 1
-        gather_interleaved \dst2, \dst1, \src2, \src1, 1
-.endm
-
 function gather32_neon
-        gather          v4.b, v5.b, v0.b, v1.b
+        fmov            w17, s0
+        ubfx            x14, x17, #0,  #8
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v0.s[1]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v0.s[2]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w14, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        orr             x13, x13, x14, lsl #32
+
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        fmov            d2,  x13
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v0.s[3]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w13, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        fmov            w14, s1
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w17, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        orr             x13, x13, x17, lsl #32
+
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        fmov            d3,  x13
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v1.s[1]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w13, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v1.s[2]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w16, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        orr             x13, x13, x16, lsl #32
+
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        fmov            d4,  x13
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v1.s[3]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        orr             w14, w17, w14, lsl #8
+        orr             w14, w15, w14, lsl #16
+        orr             x13, x13, x14, lsl #32
+        fmov            d5,  x13
+
         ret
 endfunc
 
 function gather16_neon
-        gather_interleaved v4.b, v5.b, v0.b, v0.b, 0
-        gather_interleaved v4.b, v5.b, v0.b, v0.b, 1
-        ins             v4.d[1], v5.d[1]
+        fmov            w17, s0
+        ubfx            x14, x17, #0,  #8
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        umov            w14, v0.s[1]
+        orr             w17, w16, w17, lsl #8
+        ubfx            x16, x14, #0,  #8
+        orr             w13, w15, w17, lsl #16
+        ubfx            x15, x14, #8,  #8
+        ldrb            w16, [x16, x3]
+        ubfx            x17, x14, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x14, x14, #24, #8
+        ldrb            w17, [x17, x3]
+        ldrb            w14, [x14, x3]
+        orr             w15, w16, w15, lsl #8
+        umov            w16, v0.s[2]
+        orr             w14, w17, w14, lsl #8
+        ubfx            x17, x16, #0,  #8
+        orr             w14, w15, w14, lsl #16
+        ubfx            x15, x16, #8,  #8
+        orr             x13, x13, x14, lsl #32
+
+        ldrb            w17, [x17, x3]
+        ubfx            x14, x16, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x16, x16, #24, #8
+        ldrb            w14, [x14, x3]
+        ldrb            w16, [x16, x3]
+        fmov            d4,  x13
+        orr             w15, w17, w15, lsl #8
+        umov            w17, v0.s[3]
+        orr             w16, w14, w16, lsl #8
+        ubfx            x14, x17, #0,  #8
+        orr             w13, w15, w16, lsl #16
+        ubfx            x15, x17, #8,  #8
+        ldrb            w14, [x14, x3]
+        ubfx            x16, x17, #16, #8
+        ldrb            w15, [x15, x3]
+        ubfx            x17, x17, #24, #8
+        ldrb            w16, [x16, x3]
+        ldrb            w17, [x17, x3]
+        orr             w15, w14, w15, lsl #8
+        orr             w17, w16, w17, lsl #8
+        orr             w17, w15, w17, lsl #16
+        orr             x13, x13, x17, lsl #32
+        fmov            d5,  x13
+
         ret
 endfunc
 
@@ -1355,7 +1463,7 @@ endconst
 
 .macro add_offset dst, offx, offy, src, stride
         madd            \dst, \stride, \offy, \src // grain_lut += grain_stride * offy
-        add             \dst, \dst, \offx, uxtw // grain_lut += offx
+        add             \dst, \dst, \offx          // grain_lut += offx
 .endm
 
 // void dav1d_fgy_32x32_8bpc_neon(pixel *const dst, const pixel *const src,
@@ -1403,10 +1511,10 @@ function fgy_32x32_8bpc_neon, export=1
         calc_offset     w15, w16, w15, 0,  0
         calc_offset     w6,  w10, w6,  0,  0
 
-        add_offset      x12, w11, x12, x5,  x9
-        add_offset      x14, w13, x14, x5,  x9
-        add_offset      x16, w15, x16, x5,  x9
-        add_offset      x5,  w6,  x10, x5,  x9
+        add_offset      x12, x11, x12, x5,  x9
+        add_offset      x14, x13, x14, x5,  x9
+        add_offset      x16, x15, x16, x5,  x9
+        add_offset      x5,  x6,  x10, x5,  x9
 
         ldr             w11, [sp, #24]         // type
         movrel          x13, fgy_loop_tbl
@@ -1415,7 +1523,7 @@ function fgy_32x32_8bpc_neon, export=1
         add             x6,  x14, x9,  lsl #5  // grain_lut += grain_stride * FG_BLOCK_SIZE * by
 
         tst             w11, #1
-        ldrsw           x11, [x13, w11, uxtw #2]
+        ldrsw           x11, [x13, x11, lsl #2]
 
         add             x8,  x16, x9,  lsl #5  // grain_lut += grain_stride * FG_BLOCK_SIZE * by
         add             x8,  x8,  #32          // grain_lut += FG_BLOCK_SIZE * bx
@@ -1505,10 +1613,10 @@ L(loop_\ox\oy):
         sxtl2           v19.8h,  v19.16b
 .endif
 
-        uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
-        uxtl            v4.8h,   v5.8b
-        uxtl2           v5.8h,   v5.16b
+        uxtl            v2.8h,   v2.8b   // scaling
+        uxtl            v3.8h,   v3.8b
+        uxtl            v4.8h,   v4.8b
+        uxtl            v5.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
@@ -1592,10 +1700,9 @@ function fguv_32x32_\layout\()_8bpc_neon, export=1
 
         // !csfl
         add             x10, x4,  x10, lsl #2  // + 4*uv
-        add             x14, x10, #FGD_UV_LUMA_MULT
         add             x15, x10, #FGD_UV_MULT
+        ldr             h8,  [x10, #FGD_UV_LUMA_MULT]   // uv_luma_mult
         add             x10, x10, #FGD_UV_OFFSET
-        ld1             {v8.h}[0], [x14]       // uv_luma_mult
         ld1r            {v24.8h},  [x10]       // uv_offset
         ld1             {v8.h}[1], [x15]       // uv_mult
 
@@ -1636,10 +1743,10 @@ function fguv_32x32_\layout\()_8bpc_neon, export=1
         calc_offset     w16, w17, w16, \sx, \sy
         calc_offset     w8,  w11, w8,  \sx, \sy
 
-        add_offset      x13, w12, x13, x5,  x10
-        add_offset      x15, w14, x15, x5,  x10
-        add_offset      x17, w16, x17, x5,  x10
-        add_offset      x5,  w8,  x11, x5,  x10
+        add_offset      x13, x12, x13, x5,  x10
+        add_offset      x15, x14, x15, x5,  x10
+        add_offset      x17, x16, x17, x5,  x10
+        add_offset      x5,  x8,  x11, x5,  x10
 
         add             x4,  x13, #(32 >> \sx) // grain_lut += FG_BLOCK_SIZE * bx
         add             x8,  x15, x10, lsl #(5 - \sy) // grain_lut += grain_stride * FG_BLOCK_SIZE * by
@@ -1653,7 +1760,7 @@ function fguv_32x32_\layout\()_8bpc_neon, export=1
 
         ld1             {v27.8b, v28.8b}, [x16] // overlap_coeffs
         tst             w13, #1
-        ldrsw           x13, [x14, w13, uxtw #2]
+        ldrsw           x13, [x14, x13, lsl #2]
 
         b.eq            1f
         // y overlap
@@ -1792,10 +1899,10 @@ L(fguv_loop_sx0_csfl\csfl\()_\ox\oy):
         sxtl2           v19.8h,  v19.16b
 .endif
 
-        uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
-        uxtl            v4.8h,   v5.8b
-        uxtl2           v5.8h,   v5.16b
+        uxtl            v2.8h,   v2.8b   // scaling
+        uxtl            v3.8h,   v3.8b
+        uxtl            v4.8h,   v4.8b
+        uxtl            v5.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
@@ -1951,7 +2058,7 @@ L(fguv_loop_sx1_csfl\csfl\()_\ox\oy):
 .endif
 
         uxtl            v2.8h,   v4.8b   // scaling
-        uxtl2           v3.8h,   v4.16b
+        uxtl            v3.8h,   v5.8b
 
         mul             v16.8h,  v16.8h,  v2.8h   // scaling * grain
         mul             v17.8h,  v17.8h,  v3.8h
