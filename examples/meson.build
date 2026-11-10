@@ -40,10 +40,23 @@ dav1dplay_sources = files(
     'dp_renderer_sdl.c',
 )
 
-sdl2_dependency = dependency('sdl2', version: '>= 2.0.1', required: true, include_type: 'system')
+sdl_version = get_option('sdl_version')
+if sdl_version == '3'
+    sdl_dependency = dependency('sdl3', version: '>= 3.2.0', required: true, include_type: 'system')
+elif sdl_version == '2'
+    sdl_dependency = dependency('sdl2', version: '>= 2.0.1', required: true, include_type: 'system')
+else
+    sdl_dependency = dependency('sdl3', version: '>= 3.2.0', required: false, include_type: 'system')
+    if sdl_dependency.found()
+        sdl_version = '3'
+    else
+        sdl_dependency = dependency('sdl2', version: '>= 2.0.1', required: true, include_type: 'system')
+        sdl_version = '2'
+    endif
+endif
 
-if sdl2_dependency.found()
-    dav1dplay_deps = [sdl2_dependency, libm_dependency]
+if sdl_dependency.found()
+    dav1dplay_deps = [sdl_dependency, libm_dependency]
     dav1dplay_cflags = []
 
     placebo_dependency = dependency('libplacebo', version: '>= 4.160.0', required: false)
@@ -64,6 +77,7 @@ if sdl2_dependency.found()
 
     dav1dplay_cflags += '-DHAVE_PLACEBO=' + (have_placebo ? '1' : '0')
     dav1dplay_cflags += '-DHAVE_VULKAN=' + (have_vulkan ? '1' : '0')
+    dav1dplay_cflags += '-DHAVE_SDL=' + sdl_version
 
     dav1dplay = executable('dav1dplay',
         dav1dplay_sources,
