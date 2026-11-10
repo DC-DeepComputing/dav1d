@@ -195,9 +195,11 @@ void bitfn(dav1d_apply_grain_row)(const Dav1dFilmGrainDSPContext *const dsp,
     // extend padding pixels
     if (out->p.w & ss_x) {
         pixel *ptr = luma_src;
+        const ptrdiff_t step = PXSTRIDE(in->stride[0]) << ss_y;
+        const int pw = out->p.w;
         for (int y = 0; y < bh; y++) {
-            ptr[out->p.w] = ptr[out->p.w - 1];
-            ptr += PXSTRIDE(in->stride[0]) << ss_y;
+            ptr[pw] = ptr[pw - 1];
+            ptr += step;
         }
     }
 

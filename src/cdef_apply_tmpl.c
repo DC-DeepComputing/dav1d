@@ -124,6 +124,8 @@ void bytefn(dav1d_cdef_brow)(Dav1dTaskContext *const tc,
     const int resize = f->frame_hdr->width[0] != f->frame_hdr->width[1];
     const ptrdiff_t y_stride = PXSTRIDE(f->cur.stride[0]);
     const ptrdiff_t uv_stride = PXSTRIDE(f->cur.stride[1]);
+    const ptrdiff_t step_y = 8 * y_stride;
+    const ptrdiff_t step_uv = (8 * uv_stride) >> ss_ver;
 
     for (int bit = 0, by = by_start; by < by_end; by += 2, edges |= CDEF_HAVE_TOP) {
         const int tf = tc->top_pre_cdef_toggle;
@@ -304,9 +306,9 @@ void bytefn(dav1d_cdef_brow)(Dav1dTaskContext *const tc,
             iptrs[2] += sbsz * 4 >> ss_hor;
         }
 
-        ptrs[0] += 8 * PXSTRIDE(f->cur.stride[0]);
-        ptrs[1] += 8 * PXSTRIDE(f->cur.stride[1]) >> ss_ver;
-        ptrs[2] += 8 * PXSTRIDE(f->cur.stride[1]) >> ss_ver;
+        ptrs[0] += step_y;
+        ptrs[1] += step_uv;
+        ptrs[2] += step_uv;
         tc->top_pre_cdef_toggle ^= 1;
     }
 }
