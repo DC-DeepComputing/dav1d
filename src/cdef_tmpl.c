@@ -78,10 +78,11 @@ static void padding(int16_t *tmp, const ptrdiff_t tmp_stride,
         x_end -= 2;
     }
 
+    const ptrdiff_t src_pxstride = PXSTRIDE(src_stride);
     for (int y = y_start; y < 0; y++) {
         for (int x = x_start; x < x_end; x++)
             tmp[x + y * tmp_stride] = top[x];
-        top += PXSTRIDE(src_stride);
+        top += src_pxstride;
     }
     for (int y = 0; y < h; y++)
         for (int x = x_start; x < 0; x++)
@@ -89,20 +90,20 @@ static void padding(int16_t *tmp, const ptrdiff_t tmp_stride,
     for (int y = 0; y < h; y++) {
         for (int x = (y < h) ? 0 : x_start; x < x_end; x++)
             tmp[x] = src[x];
-        src += PXSTRIDE(src_stride);
+        src += src_pxstride;
         tmp += tmp_stride;
     }
     for (int y = h; y < y_end; y++) {
         for (int x = x_start; x < x_end; x++)
             tmp[x] = bottom[x];
-        bottom += PXSTRIDE(src_stride);
+        bottom += src_pxstride;
         tmp += tmp_stride;
     }
 
 }
 
 static NOINLINE void
-cdef_filter_block_c(pixel *dst, const ptrdiff_t dst_stride,
+cdef_filter_block_c(pixel *dst, ptrdiff_t dst_stride,
                     const pixel (*left)[2],
                     const pixel *const top, const pixel *const bottom,
                     const int pri_strength, const int sec_strength,
@@ -116,6 +117,7 @@ cdef_filter_block_c(pixel *dst, const ptrdiff_t dst_stride,
     const int8_t (*const cdef_dirs)[2] = &dav1d_cdef_directions[dir];
 
     padding(tmp, tmp_stride, dst, dst_stride, left, top, bottom, w, h, edges);
+    dst_stride = PXSTRIDE(dst_stride);
 
     if (pri_strength) {
         const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
@@ -164,7 +166,7 @@ cdef_filter_block_c(pixel *dst, const ptrdiff_t dst_stride,
                     }
                     dst[x] = iclip(px + ((sum - (sum < 0) + 8) >> 4), min, max);
                 }
-                dst += PXSTRIDE(dst_stride);
+                dst += dst_stride;
                 tmp += tmp_stride;
             } while (--h);
         } else { // pri_strength only
@@ -183,7 +185,7 @@ cdef_filter_block_c(pixel *dst, const ptrdiff_t dst_stride,
                     }
                     dst[x] = px + ((sum - (sum < 0) + 8) >> 4);
                 }
-                dst += PXSTRIDE(dst_stride);
+                dst += dst_stride;
                 tmp += tmp_stride;
             } while (--h);
         }
@@ -209,7 +211,7 @@ cdef_filter_block_c(pixel *dst, const ptrdiff_t dst_stride,
                 }
                 dst[x] = px + ((sum - (sum < 0) + 8) >> 4);
             }
-            dst += PXSTRIDE(dst_stride);
+            dst += dst_stride;
             tmp += tmp_stride;
         } while (--h);
     }
@@ -240,24 +242,29 @@ static int cdef_find_dir_c(const pixel *img, const ptrdiff_t stride,
                            unsigned *const var HIGHBD_DECL_SUFFIX)
 {
     const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
+    const ptrdiff_t img_pxstride = PXSTRIDE(stride);
     int partial_sum_hv[2][8] = { { 0 } };
     int partial_sum_diag[2][15] = { { 0 } };
     int partial_sum_alt[4][11] = { { 0 } };
 
     for (int y = 0; y < 8; y++) {
+        const int y_shr1 = y >> 1;
+        const int y_plus_3 = y + 3;
+        const int three_minus_yshr1 = 3 - y_shr1;
         for (int x = 0; x < 8; x++) {
             const int px = (img[x] >> bitdepth_min_8) - 128;
+            const int x_shr1 = x >> 1;
 
-            partial_sum_diag[0][     y       +  x      ] += px;
-            partial_sum_alt [0][     y       + (x >> 1)] += px;
-            partial_sum_hv  [0][     y                 ] += px;
-            partial_sum_alt [1][3 +  y       - (x >> 1)] += px;
-            partial_sum_diag[1][7 +  y       -  x      ] += px;
-            partial_sum_alt [2][3 - (y >> 1) +  x      ] += px;
-            partial_sum_hv  [1][                x      ] += px;
-            partial_sum_alt [3][    (y >> 1) +  x      ] += px;
+            partial_sum_diag[0][     y                 +  x      ] += px;
+            partial_sum_alt [0][     y                 +  x_shr1 ] += px;
+            partial_sum_hv  [0][     y                           ] += px;
+            partial_sum_alt [1][     y_plus_3          -  x_shr1 ] += px;
+            partial_sum_diag[1][7 +  y                 -  x      ] += px;
+            partial_sum_alt [2][     three_minus_yshr1 +  x      ] += px;
+            partial_sum_hv  [1][                          x      ] += px;
+            partial_sum_alt [3][     y_shr1            +  x      ] += px;
         }
-        img += PXSTRIDE(stride);
+        img += img_pxstride;
     }
 
     unsigned cost[8] = { 0 };
