@@ -190,6 +190,7 @@ static void inv_txfm_add_wht_wht_4x4_c(pixel *dst, const ptrdiff_t stride,
                                        coef *const coeff, const int eob
                                        HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t pxstride = PXSTRIDE(stride);
     int32_t tmp[4 * 4], *c = tmp;
     for (int y = 0; y < 4; y++, c += 4) {
         for (int x = 0; x < 4; x++)
@@ -202,7 +203,7 @@ static void inv_txfm_add_wht_wht_4x4_c(pixel *dst, const ptrdiff_t stride,
         dav1d_inv_wht4_1d_c(&tmp[x], 4);
 
     c = tmp;
-    for (int y = 0; y < 4; y++, dst += PXSTRIDE(stride))
+    for (int y = 0; y < 4; y++, dst += pxstride)
         for (int x = 0; x < 4; x++)
             dst[x] = iclip_pixel(dst[x] + *c++);
 }
