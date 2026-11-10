@@ -195,6 +195,7 @@ put_8tap_scaled_c(pixel *dst, const ptrdiff_t dst_stride,
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     const int intermediate_rnd = (1 << intermediate_bits) >> 1;
+    const ptrdiff_t dst_pxstride = PXSTRIDE(dst_stride);
     int16_t mid[128 * 8];
     int16_t *mid_ptrs[8];
     int in_y = -8;
@@ -239,7 +240,7 @@ put_8tap_scaled_c(pixel *dst, const ptrdiff_t dst_stride,
                                               intermediate_bits);
 
         my += dy;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_pxstride;
     }
 }
 
@@ -497,6 +498,8 @@ static void put_bilin_scaled_c(pixel *dst, ptrdiff_t dst_stride,
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     int16_t mid[128 * 2];
     int in_y = -2;
+    dst_stride = PXSTRIDE(dst_stride);
+    src_stride = PXSTRIDE(src_stride);
 
     do {
         int x;
@@ -517,7 +520,7 @@ static void put_bilin_scaled_c(pixel *dst, ptrdiff_t dst_stride,
                 imx &= 0x3ff;
             }
 
-            src += PXSTRIDE(src_stride);
+            src += src_stride;
             in_y++;
         }
 
@@ -526,7 +529,7 @@ static void put_bilin_scaled_c(pixel *dst, ptrdiff_t dst_stride,
                                        4 + intermediate_bits);
 
         my += dy;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     } while (--h);
 }
 
@@ -593,6 +596,7 @@ static void prep_bilin_scaled_c(int16_t *tmp,
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     int16_t mid[128 * 2];
     int in_y = -2;
+    src_stride = PXSTRIDE(src_stride);
 
     do {
         int x;
@@ -613,7 +617,7 @@ static void prep_bilin_scaled_c(int16_t *tmp,
                 imx &= 0x3ff;
             }
 
-            src += PXSTRIDE(src_stride);
+            src += src_stride;
             in_y++;
         }
 
@@ -625,30 +629,32 @@ static void prep_bilin_scaled_c(int16_t *tmp,
     } while (--h);
 }
 
-static void avg_c(pixel *dst, const ptrdiff_t dst_stride,
+static void avg_c(pixel *dst, ptrdiff_t dst_stride,
                   const int16_t *tmp1, const int16_t *tmp2, const int w, int h
                   HIGHBD_DECL_SUFFIX)
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     const int sh = intermediate_bits + 1;
     const int rnd = (1 << intermediate_bits) + PREP_BIAS * 2;
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         for (int x = 0; x < w; x++)
             dst[x] = iclip_pixel((tmp1[x] + tmp2[x] + rnd) >> sh);
 
         tmp1 += w;
         tmp2 += w;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     } while (--h);
 }
 
-static void w_avg_c(pixel *dst, const ptrdiff_t dst_stride,
+static void w_avg_c(pixel *dst, ptrdiff_t dst_stride,
                     const int16_t *tmp1, const int16_t *tmp2, const int w, int h,
                     const int weight HIGHBD_DECL_SUFFIX)
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     const int sh = intermediate_bits + 4;
     const int rnd = (8 << intermediate_bits) + PREP_BIAS * 16;
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         for (int x = 0; x < w; x++)
             dst[x] = iclip_pixel((tmp1[x] * weight +
@@ -656,17 +662,18 @@ static void w_avg_c(pixel *dst, const ptrdiff_t dst_stride,
 
         tmp1 += w;
         tmp2 += w;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     } while (--h);
 }
 
-static void mask_c(pixel *dst, const ptrdiff_t dst_stride,
+static void mask_c(pixel *dst, ptrdiff_t dst_stride,
                    const int16_t *tmp1, const int16_t *tmp2, const int w, int h,
                    const uint8_t *mask HIGHBD_DECL_SUFFIX)
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     const int sh = intermediate_bits + 6;
     const int rnd = (32 << intermediate_bits) + PREP_BIAS * 64;
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         for (int x = 0; x < w; x++)
             dst[x] = iclip_pixel((tmp1[x] * mask[x] +
@@ -675,53 +682,57 @@ static void mask_c(pixel *dst, const ptrdiff_t dst_stride,
         tmp1 += w;
         tmp2 += w;
         mask += w;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     } while (--h);
 }
 
 #define blend_px(a, b, m) (((a * (64 - m) + b * m) + 32) >> 6)
-static void blend_c(pixel *dst, const ptrdiff_t dst_stride, const pixel *tmp,
+static void blend_c(pixel *dst, ptrdiff_t dst_stride, const pixel *tmp,
                     const int w, int h, const uint8_t *mask)
 {
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         for (int x = 0; x < w; x++) {
             dst[x] = blend_px(dst[x], tmp[x], mask[x]);
         }
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
         tmp += w;
         mask += w;
     } while (--h);
 }
 
-static void blend_v_c(pixel *dst, const ptrdiff_t dst_stride, const pixel *tmp,
+static void blend_v_c(pixel *dst, ptrdiff_t dst_stride, const pixel *tmp,
                       const int w, int h)
 {
     const uint8_t *const mask = &dav1d_obmc_masks[w];
+    const int ww = (w * 3) >> 2;
+    dst_stride = PXSTRIDE(dst_stride);
     do {
-        for (int x = 0; x < (w * 3) >> 2; x++) {
+        for (int x = 0; x < ww; x++) {
             dst[x] = blend_px(dst[x], tmp[x], mask[x]);
         }
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
         tmp += w;
     } while (--h);
 }
 
-static void blend_h_c(pixel *dst, const ptrdiff_t dst_stride, const pixel *tmp,
+static void blend_h_c(pixel *dst, ptrdiff_t dst_stride, const pixel *tmp,
                       const int w, int h)
 {
     const uint8_t *mask = &dav1d_obmc_masks[h];
     h = (h * 3) >> 2;
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         const int m = *mask++;
         for (int x = 0; x < w; x++) {
             dst[x] = blend_px(dst[x], tmp[x], m);
         }
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
         tmp += w;
     } while (--h);
 }
 
-static void w_mask_c(pixel *dst, const ptrdiff_t dst_stride,
+static void w_mask_c(pixel *dst, ptrdiff_t dst_stride,
                      const int16_t *tmp1, const int16_t *tmp2, const int w, int h,
                      uint8_t *mask, const int sign,
                      const int ss_hor, const int ss_ver HIGHBD_DECL_SUFFIX)
@@ -734,6 +745,7 @@ static void w_mask_c(pixel *dst, const ptrdiff_t dst_stride,
     const int rnd = (32 << intermediate_bits) + PREP_BIAS * 64;
     const int mask_sh = bitdepth + intermediate_bits - 4;
     const int mask_rnd = 1 << (mask_sh - 5);
+    dst_stride = PXSTRIDE(dst_stride);
     do {
         for (int x = 0; x < w; x++) {
             const int tmpdiff = tmp1[x] - tmp2[x];
@@ -761,7 +773,7 @@ static void w_mask_c(pixel *dst, const ptrdiff_t dst_stride,
 
         tmp1 += w;
         tmp2 += w;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
         if (!ss_ver || (h & 1)) mask += w >> ss_hor;
     } while (--h);
 }
@@ -796,15 +808,17 @@ w_mask_fns(420, 1, 1);
 #define FILTER_WARP_CLIP(src, x, F, stride, sh) \
     iclip_pixel(FILTER_WARP_RND(src, x, F, stride, sh))
 
-static void warp_affine_8x8_c(pixel *dst, const ptrdiff_t dst_stride,
-                              const pixel *src, const ptrdiff_t src_stride,
+static void warp_affine_8x8_c(pixel *dst, ptrdiff_t dst_stride,
+                              const pixel *src, ptrdiff_t src_stride,
                               const int16_t *const abcd, int mx, int my
                               HIGHBD_DECL_SUFFIX)
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     int16_t mid[15 * 8], *mid_ptr = mid;
+    src_stride = PXSTRIDE(src_stride);
+    dst_stride = PXSTRIDE(dst_stride);
 
-    src -= 3 * PXSTRIDE(src_stride);
+    src -= 3 * src_stride;
     for (int y = 0; y < 15; y++, mx += abcd[1]) {
         for (int x = 0, tmx = mx; x < 8; x++, tmx += abcd[0]) {
             const int8_t *const filter =
@@ -813,7 +827,7 @@ static void warp_affine_8x8_c(pixel *dst, const ptrdiff_t dst_stride,
             mid_ptr[x] = FILTER_WARP_RND(src, x, filter, 1,
                                          7 - intermediate_bits);
         }
-        src += PXSTRIDE(src_stride);
+        src += src_stride;
         mid_ptr += 8;
     }
 
@@ -827,19 +841,20 @@ static void warp_affine_8x8_c(pixel *dst, const ptrdiff_t dst_stride,
                                       7 + intermediate_bits);
         }
         mid_ptr += 8;
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     }
 }
 
 static void warp_affine_8x8t_c(int16_t *tmp, const ptrdiff_t tmp_stride,
-                               const pixel *src, const ptrdiff_t src_stride,
+                               const pixel *src, ptrdiff_t src_stride,
                                const int16_t *const abcd, int mx, int my
                                HIGHBD_DECL_SUFFIX)
 {
     const int intermediate_bits = get_intermediate_bits(bitdepth_max);
     int16_t mid[15 * 8], *mid_ptr = mid;
+    src_stride = PXSTRIDE(src_stride);
 
-    src -= 3 * PXSTRIDE(src_stride);
+    src -= 3 * src_stride;
     for (int y = 0; y < 15; y++, mx += abcd[1]) {
         for (int x = 0, tmx = mx; x < 8; x++, tmx += abcd[0]) {
             const int8_t *const filter =
@@ -848,7 +863,7 @@ static void warp_affine_8x8t_c(int16_t *tmp, const ptrdiff_t tmp_stride,
             mid_ptr[x] = FILTER_WARP_RND(src, x, filter, 1,
                                          7 - intermediate_bits);
         }
-        src += PXSTRIDE(src_stride);
+        src += src_stride;
         mid_ptr += 8;
     }
 
@@ -868,11 +883,14 @@ static void warp_affine_8x8t_c(int16_t *tmp, const ptrdiff_t tmp_stride,
 static void emu_edge_c(const intptr_t bw, const intptr_t bh,
                        const intptr_t iw, const intptr_t ih,
                        const intptr_t x, const intptr_t y,
-                       pixel *dst, const ptrdiff_t dst_stride,
-                       const pixel *ref, const ptrdiff_t ref_stride)
+                       pixel *dst, ptrdiff_t dst_stride,
+                       const pixel *ref, ptrdiff_t ref_stride)
 {
+    dst_stride = PXSTRIDE(dst_stride);
+    ref_stride = PXSTRIDE(ref_stride);
+
     // find offset in reference of visible block to copy
-    ref += iclip((int) y, 0, (int) ih - 1) * PXSTRIDE(ref_stride) +
+    ref += iclip((int) y, 0, (int) ih - 1) * ref_stride +
            iclip((int) x, 0, (int) iw - 1);
 
     // number of pixels to extend (left, right, top, bottom)
@@ -884,7 +902,7 @@ static void emu_edge_c(const intptr_t bw, const intptr_t bh,
     assert(top_ext + bottom_ext < bh);
 
     // copy visible portion first
-    pixel *blk = dst + top_ext * PXSTRIDE(dst_stride);
+    pixel *blk = dst + top_ext * dst_stride;
     const int center_w = (int) (bw - left_ext - right_ext);
     const int center_h = (int) (bh - top_ext - bottom_ext);
     for (int y = 0; y < center_h; y++) {
@@ -896,50 +914,53 @@ static void emu_edge_c(const intptr_t bw, const intptr_t bh,
         if (right_ext)
             pixel_set(blk + left_ext + center_w, blk[left_ext + center_w - 1],
                       right_ext);
-        ref += PXSTRIDE(ref_stride);
-        blk += PXSTRIDE(dst_stride);
+        ref += ref_stride;
+        blk += dst_stride;
     }
 
     // copy top
-    blk = dst + top_ext * PXSTRIDE(dst_stride);
+    blk = dst + top_ext * dst_stride;
     for (int y = 0; y < top_ext; y++) {
         pixel_copy(dst, blk, bw);
-        dst += PXSTRIDE(dst_stride);
+        dst += dst_stride;
     }
 
     // copy bottom
-    dst += center_h * PXSTRIDE(dst_stride);
+    dst += center_h * dst_stride;
     for (int y = 0; y < bottom_ext; y++) {
-        pixel_copy(dst, &dst[-PXSTRIDE(dst_stride)], bw);
-        dst += PXSTRIDE(dst_stride);
+        pixel_copy(dst, &dst[-dst_stride], bw);
+        dst += dst_stride;
     }
 }
 
-static void resize_c(pixel *dst, const ptrdiff_t dst_stride,
-                     const pixel *src, const ptrdiff_t src_stride,
+static void resize_c(pixel *dst, ptrdiff_t dst_stride,
+                     const pixel *src, ptrdiff_t src_stride,
                      const int dst_w, int h, const int src_w,
                      const int dx, const int mx0 HIGHBD_DECL_SUFFIX)
 {
+    const int max_src_x = src_w - 1;
+    dst_stride = PXSTRIDE(dst_stride);
+    src_stride = PXSTRIDE(src_stride);
     do {
         int mx = mx0, src_x = -1;
         for (int x = 0; x < dst_w; x++) {
             const int8_t *const F = dav1d_resize_filter[mx >> 8];
-            dst[x] = iclip_pixel((-(F[0] * src[iclip(src_x - 3, 0, src_w - 1)] +
-                                    F[1] * src[iclip(src_x - 2, 0, src_w - 1)] +
-                                    F[2] * src[iclip(src_x - 1, 0, src_w - 1)] +
-                                    F[3] * src[iclip(src_x + 0, 0, src_w - 1)] +
-                                    F[4] * src[iclip(src_x + 1, 0, src_w - 1)] +
-                                    F[5] * src[iclip(src_x + 2, 0, src_w - 1)] +
-                                    F[6] * src[iclip(src_x + 3, 0, src_w - 1)] +
-                                    F[7] * src[iclip(src_x + 4, 0, src_w - 1)]) +
+            dst[x] = iclip_pixel((-(F[0] * src[iclip(src_x - 3, 0, max_src_x)] +
+                                    F[1] * src[iclip(src_x - 2, 0, max_src_x)] +
+                                    F[2] * src[iclip(src_x - 1, 0, max_src_x)] +
+                                    F[3] * src[iclip(src_x + 0, 0, max_src_x)] +
+                                    F[4] * src[iclip(src_x + 1, 0, max_src_x)] +
+                                    F[5] * src[iclip(src_x + 2, 0, max_src_x)] +
+                                    F[6] * src[iclip(src_x + 3, 0, max_src_x)] +
+                                    F[7] * src[iclip(src_x + 4, 0, max_src_x)]) +
                                   64) >> 7);
             mx += dx;
             src_x += mx >> 14;
             mx &= 0x3fff;
         }
 
-        dst += PXSTRIDE(dst_stride);
-        src += PXSTRIDE(src_stride);
+        dst += dst_stride;
+        src += src_stride;
     } while (--h);
 }
 
