@@ -42,10 +42,12 @@ static void lr_stripe(const Dav1dFrameContext *const f, pixel *p,
     const int chroma = !!plane;
     const int ss_ver = chroma & (f->sr_cur.p.p.layout == DAV1D_PIXEL_LAYOUT_I420);
     const ptrdiff_t stride = f->sr_cur.p.stride[chroma];
+    const ptrdiff_t pxstride = PXSTRIDE(stride);
+    const ptrdiff_t lpf_step = 4 * pxstride;
     const int sby = (y + (y ? 8 << ss_ver : 0)) >> (6 - ss_ver + f->seq_hdr->sb128);
     const int have_tt = f->c->n_tc > 1;
     const pixel *lpf = f->lf.lr_lpf_line[plane] +
-        have_tt * (sby * (4 << f->seq_hdr->sb128) - 4) * PXSTRIDE(stride) + x;
+        have_tt * (sby * (4 << f->seq_hdr->sb128) - 4) * pxstride + x;
 
     // The first stripe of the frame is shorter by 8 luma pixel rows.
     int stripe_h = imin((64 - 8 * !y) >> ss_ver, row_h - y);
@@ -89,18 +91,19 @@ static void lr_stripe(const Dav1dFrameContext *const f, pixel *p,
 
         left += stripe_h;
         y += stripe_h;
-        p += stripe_h * PXSTRIDE(stride);
+        p += stripe_h * pxstride;
         edges |= LR_HAVE_TOP;
         stripe_h = imin(64 >> ss_ver, row_h - y);
         if (stripe_h == 0) break;
-        lpf += 4 * PXSTRIDE(stride);
+        lpf += lpf_step;
     }
 }
 
 static void backup4xU(pixel (*dst)[4], const pixel *src, const ptrdiff_t src_stride,
                       int u)
 {
-    for (; u > 0; u--, dst++, src += PXSTRIDE(src_stride))
+    const ptrdiff_t src_pxstride = PXSTRIDE(src_stride);
+    for (; u > 0; u--, dst++, src += src_pxstride)
         pixel_copy(dst, src, 4);
 }
 
