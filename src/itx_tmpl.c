@@ -41,7 +41,7 @@
 #include "src/tables.h"
 
 static NOINLINE void
-inv_txfm_add_c(pixel *dst, const ptrdiff_t stride, coef *const coeff,
+inv_txfm_add_c(pixel *dst, ptrdiff_t stride, coef *const coeff,
                const int eob, const /*enum RectTxfmSize*/ int tx, const int shift,
                const enum TxfmType txtp HIGHBD_DECL_SUFFIX)
 {
@@ -54,6 +54,7 @@ inv_txfm_add_c(pixel *dst, const ptrdiff_t stride, coef *const coeff,
 
     const int is_rect2 = w * 2 == h || h * 2 == w;
     const int rnd = (1 << shift) >> 1;
+    stride = PXSTRIDE(stride);
 
     if (eob < has_dconly) {
         int dc = coeff[0];
@@ -63,7 +64,7 @@ inv_txfm_add_c(pixel *dst, const ptrdiff_t stride, coef *const coeff,
         dc = (dc * 181 + 128) >> 8;
         dc = (dc + rnd) >> shift;
         dc = (dc * 181 + 128 + 2048) >> 12;
-        for (int y = 0; y < h; y++, dst += PXSTRIDE(stride))
+        for (int y = 0; y < h; y++, dst += stride)
             for (int x = 0; x < w; x++)
                 dst[x] = iclip_pixel(dst[x] + dc);
         return;
@@ -93,14 +94,18 @@ inv_txfm_add_c(pixel *dst, const ptrdiff_t stride, coef *const coeff,
         last_nonzero_col = dav1d_last_nonzero_col_from_eob[tx][eob];
     }
     assert(last_nonzero_col < sh);
-    for (int y = 0; y <= last_nonzero_col; y++, c += w) {
-        if (is_rect2)
+    if (is_rect2) {
+        for (int y = 0; y <= last_nonzero_col; y++, c += w) {
             for (int x = 0; x < sw; x++)
                 c[x] = (coeff[y + x * sh] * 181 + 128) >> 8;
-        else
+            first_1d_fn(c, 1, row_clip_min, row_clip_max);
+        }
+    } else {
+        for (int y = 0; y <= last_nonzero_col; y++, c += w) {
             for (int x = 0; x < sw; x++)
                 c[x] = coeff[y + x * sh];
-        first_1d_fn(c, 1, row_clip_min, row_clip_max);
+            first_1d_fn(c, 1, row_clip_min, row_clip_max);
+        }
     }
     if (last_nonzero_col + 1 < sh)
         memset(c, 0, sizeof(*c) * (sh - last_nonzero_col - 1) * w);
@@ -113,7 +118,7 @@ inv_txfm_add_c(pixel *dst, const ptrdiff_t stride, coef *const coeff,
         second_1d_fn(&tmp[x], w, col_clip_min, col_clip_max);
 
     c = tmp;
-    for (int y = 0; y < h; y++, dst += PXSTRIDE(stride))
+    for (int y = 0; y < h; y++, dst += stride)
         for (int x = 0; x < w; x++)
             dst[x] = iclip_pixel(dst[x] + ((*c++ + 8) >> 4));
 }
