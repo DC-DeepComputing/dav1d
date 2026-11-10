@@ -135,6 +135,7 @@ unsigned dav1d_msac_decode_symbol_adapt_c(MsacContext *const s,
 {
     const unsigned c = s->dif >> (EC_WIN_SIZE - 16), r = s->rng >> 8;
     unsigned u, v = s->rng, val = -1;
+    unsigned min_prob_term = EC_MIN_PROB * (unsigned)n_symbols;
 
     assert(n_symbols <= 15);
     assert(cdf[n_symbols] <= 32);
@@ -144,7 +145,8 @@ unsigned dav1d_msac_decode_symbol_adapt_c(MsacContext *const s,
         u = v;
         v = r * (cdf[val] >> EC_PROB_SHIFT);
         v >>= 7 - EC_PROB_SHIFT;
-        v += EC_MIN_PROB * ((unsigned)n_symbols - val);
+        v += min_prob_term;
+        min_prob_term -= EC_MIN_PROB;
     } while (c < v);
 
     assert(u <= s->rng);

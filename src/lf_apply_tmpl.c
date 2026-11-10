@@ -51,23 +51,25 @@ static void backup_lpf(const Dav1dFrameContext *const f,
 
     // The first stripe of the frame is shorter by 8 luma pixel rows.
     int stripe_h = ((64 << (cdef_backup & sb128)) - 8 * !row) >> ss_ver;
-    src += (stripe_h - 2) * PXSTRIDE(src_stride);
+    const ptrdiff_t src_pxstride = PXSTRIDE(src_stride);
+    const ptrdiff_t dst_pxstride = PXSTRIDE(dst_stride);
+    src += (stripe_h - 2) * src_pxstride;
 
     if (f->c->n_tc == 1) {
         if (row) {
             const int top = 4 << sb128;
             // Copy the top part of the stored loop filtered pixels from the
             // previous sb row needed above the first stripe of this sb row.
-            pixel_copy(&dst[PXSTRIDE(dst_stride) *  0],
-                       &dst[PXSTRIDE(dst_stride) *  top],      dst_w);
-            pixel_copy(&dst[PXSTRIDE(dst_stride) *  1],
-                       &dst[PXSTRIDE(dst_stride) * (top + 1)], dst_w);
-            pixel_copy(&dst[PXSTRIDE(dst_stride) *  2],
-                       &dst[PXSTRIDE(dst_stride) * (top + 2)], dst_w);
-            pixel_copy(&dst[PXSTRIDE(dst_stride) *  3],
-                       &dst[PXSTRIDE(dst_stride) * (top + 3)], dst_w);
+            pixel_copy(&dst[dst_pxstride *  0],
+                       &dst[dst_pxstride *  top],      dst_w);
+            pixel_copy(&dst[dst_pxstride *  1],
+                       &dst[dst_pxstride * (top + 1)], dst_w);
+            pixel_copy(&dst[dst_pxstride *  2],
+                       &dst[dst_pxstride * (top + 2)], dst_w);
+            pixel_copy(&dst[dst_pxstride *  3],
+                       &dst[dst_pxstride * (top + 3)], dst_w);
         }
-        dst += 4 * PXSTRIDE(dst_stride);
+        dst += 4 * dst_pxstride;
     }
 
     if (lr_backup && (f->frame_hdr->width[0] != f->frame_hdr->width[1])) {
@@ -78,25 +80,25 @@ static void backup_lpf(const Dav1dFrameContext *const f,
                               f->resize_start[ss_hor] HIGHBD_CALL_SUFFIX);
             row += stripe_h; // unmodified stripe_h for the 1st stripe
             stripe_h = 64 >> ss_ver;
-            src += stripe_h * PXSTRIDE(src_stride);
-            dst += n_lines * PXSTRIDE(dst_stride);
+            src += stripe_h * src_pxstride;
+            dst += n_lines * dst_pxstride;
             if (n_lines == 3) {
-                pixel_copy(dst, &dst[-PXSTRIDE(dst_stride)], dst_w);
-                dst += PXSTRIDE(dst_stride);
+                pixel_copy(dst, &dst[-dst_pxstride], dst_w);
+                dst += dst_pxstride;
             }
         }
     } else {
         while (row + stripe_h <= row_h) {
             const int n_lines = 4 - (row + stripe_h + 1 == h);
             for (int i = 0; i < 4; i++) {
-                pixel_copy(dst, i == n_lines ? &dst[-PXSTRIDE(dst_stride)] :
+                pixel_copy(dst, i == n_lines ? &dst[-dst_pxstride] :
                                                src, src_w);
-                dst += PXSTRIDE(dst_stride);
-                src += PXSTRIDE(src_stride);
+                dst += dst_pxstride;
+                src += src_pxstride;
             }
             row += stripe_h; // unmodified stripe_h for the 1st stripe
             stripe_h = 64 >> ss_ver;
-            src += (stripe_h - 4) * PXSTRIDE(src_stride);
+            src += (stripe_h - 4) * src_pxstride;
         }
     }
 }
@@ -224,8 +226,9 @@ static inline void filter_plane_rows_y(const Dav1dFrameContext *const f,
     //                                 block1
     // filter edges between rows (e.g. ------)
     //                                 block2
+    const ptrdiff_t step_y = 4 * PXSTRIDE(ls);
     for (int y = starty4; y < endy4;
-         y++, dst += 4 * PXSTRIDE(ls), lvl += b4_stride)
+         y++, dst += step_y, lvl += b4_stride)
     {
         if (!have_top && !y) continue;
         const uint32_t vmask[4] = {
@@ -288,12 +291,13 @@ static inline void filter_plane_rows_uv(const Dav1dFrameContext *const f,
     const Dav1dDSPContext *const dsp = f->dsp;
     const loopfilter_sb_fn loop_filter_sb = dsp->lf.loop_filter_sb[1][1];
     ptrdiff_t off_l = 0;
+    const ptrdiff_t step_uv = 4 * PXSTRIDE(ls);
 
     //                                 block1
     // filter edges between rows (e.g. ------)
     //                                 block2
     for (int y = starty4; y < endy4;
-         y++, off_l += 4 * PXSTRIDE(ls), lvl += b4_stride)
+         y++, off_l += step_uv, lvl += b4_stride)
     {
         if (!have_top && !y) continue;
         const uint32_t vmask[3] = {

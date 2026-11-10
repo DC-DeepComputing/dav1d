@@ -66,6 +66,7 @@ static void generate_grain_y_c(entry buf[][GRAIN_WIDTH],
 
     const int ar_pad = 3;
     const int ar_lag = data->ar_coeff_lag;
+    const uint64_t ar_coeff_shift = data->ar_coeff_shift;
 
     for (int y = ar_pad; y < GRAIN_HEIGHT; y++) {
         for (int x = ar_pad; x < GRAIN_WIDTH - ar_pad; x++) {
@@ -79,7 +80,7 @@ static void generate_grain_y_c(entry buf[][GRAIN_WIDTH],
                 }
             }
 
-            const int grain = buf[y][x] + round2(sum, data->ar_coeff_shift);
+            const int grain = buf[y][x] + round2(sum, ar_coeff_shift);
             buf[y][x] = iclip(grain, grain_min, grain_max);
         }
     }
@@ -109,8 +110,12 @@ generate_grain_uv_c(entry buf[][GRAIN_WIDTH],
 
     const int ar_pad = 3;
     const int ar_lag = data->ar_coeff_lag;
+    const uint64_t ar_coeff_shift = data->ar_coeff_shift;
+    const int num_y_points = data->num_y_points;
+    const int sub_shift = subx + suby;
 
     for (int y = ar_pad; y < chromaH; y++) {
+        const int lumaY = ((y - ar_pad) << suby) + ar_pad;
         for (int x = ar_pad; x < chromaW - ar_pad; x++) {
             const int8_t *coeff = data->ar_coeffs_uv[uv];
             int sum = 0;
@@ -119,17 +124,16 @@ generate_grain_uv_c(entry buf[][GRAIN_WIDTH],
                     // For the final (current) pixel, we need to add in the
                     // contribution from the luma grain texture
                     if (!dx && !dy) {
-                        if (!data->num_y_points)
+                        if (!num_y_points)
                             break;
                         int luma = 0;
                         const int lumaX = ((x - ar_pad) << subx) + ar_pad;
-                        const int lumaY = ((y - ar_pad) << suby) + ar_pad;
                         for (int i = 0; i <= suby; i++) {
                             for (int j = 0; j <= subx; j++) {
                                 luma += buf_y[lumaY + i][lumaX + j];
                             }
                         }
-                        luma = round2(luma, subx + suby);
+                        luma = round2(luma, sub_shift);
                         sum += luma * (*coeff);
                         break;
                     }
@@ -138,7 +142,7 @@ generate_grain_uv_c(entry buf[][GRAIN_WIDTH],
                 }
             }
 
-            const int grain = buf[y][x] + round2(sum, data->ar_coeff_shift);
+            const int grain = buf[y][x] + round2(sum, ar_coeff_shift);
             buf[y][x] = iclip(grain, grain_min, grain_max);
         }
     }
@@ -177,6 +181,8 @@ static void fgy_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
     const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
     const int grain_ctr = 128 << bitdepth_min_8;
     const int grain_min = -grain_ctr, grain_max = grain_ctr - 1;
+    const ptrdiff_t pxstride = PXSTRIDE(stride);
+    const uint64_t scaling_shift = data->scaling_shift;
 
     int min_value, max_value;
     if (data->clip_to_restricted_range) {
@@ -219,17 +225,20 @@ static void fgy_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
 
         static const int w[2][2] = { { 27, 17 }, { 17, 27 } };
 
-#define add_noise_y(x, y, grain)                                                  \
-        const pixel *const src = src_row + (y) * PXSTRIDE(stride) + (x) + bx;     \
-        pixel *const dst = dst_row + (y) * PXSTRIDE(stride) + (x) + bx;           \
-        const int noise = round2(scaling[ *src ] * (grain), data->scaling_shift); \
+#define add_noise_y(x, grain)                                                     \
+        const pixel *const src = src_base + (x);                                  \
+        pixel *const dst = dst_base + (x);                                        \
+        const int noise = round2(scaling[ *src ] * (grain), scaling_shift);       \
         *dst = iclip(*src + noise, min_value, max_value);
 
         for (int y = ystart; y < bh; y++) {
+            const pixel *const src_base = src_row + y * pxstride + bx;
+            pixel *const dst_base = dst_row + y * pxstride + bx;
+
             // Non-overlapped image region (straightforward)
             for (int x = xstart; x < bw; x++) {
                 int grain = sample_lut(grain_lut, offsets, 0, 0, 0, 0, x, y);
-                add_noise_y(x, y, grain);
+                add_noise_y(x, grain);
             }
 
             // Special case for overlapped column
@@ -238,18 +247,21 @@ static void fgy_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
                 int old   = sample_lut(grain_lut, offsets, 0, 0, 1, 0, x, y);
                 grain = round2(old * w[x][0] + grain * w[x][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_y(x, y, grain);
+                add_noise_y(x, grain);
             }
         }
 
         for (int y = 0; y < ystart; y++) {
+            const pixel *const src_base = src_row + y * pxstride + bx;
+            pixel *const dst_base = dst_row + y * pxstride + bx;
+
             // Special case for overlapped row (sans corner)
             for (int x = xstart; x < bw; x++) {
                 int grain = sample_lut(grain_lut, offsets, 0, 0, 0, 0, x, y);
                 int old   = sample_lut(grain_lut, offsets, 0, 0, 0, 1, x, y);
                 grain = round2(old * w[y][0] + grain * w[y][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_y(x, y, grain);
+                add_noise_y(x, grain);
             }
 
             // Special case for doubly-overlapped corner
@@ -269,9 +281,10 @@ static void fgy_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
                 // Mix the row rows together and apply grain
                 grain = round2(top * w[y][0] + grain * w[y][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_y(x, y, grain);
+                add_noise_y(x, grain);
             }
         }
+#undef add_noise_y
     }
 }
 
@@ -288,6 +301,13 @@ fguv_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
     const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
     const int grain_ctr = 128 << bitdepth_min_8;
     const int grain_min = -grain_ctr, grain_max = grain_ctr - 1;
+    const ptrdiff_t pxstride = PXSTRIDE(stride);
+    const ptrdiff_t luma_pxstride = PXSTRIDE(luma_stride);
+    const uint64_t scaling_shift = data->scaling_shift;
+    const int uv_luma_mult = data->uv_luma_mult[uv];
+    const int uv_mult = data->uv_mult[uv];
+    const int uv_offset = data->uv_offset[uv] * (1 << bitdepth_min_8);
+    const int chroma_scaling_from_luma = data->chroma_scaling_from_luma;
 
     int min_value, max_value;
     if (data->clip_to_restricted_range) {
@@ -332,30 +352,32 @@ fguv_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
             { { 23, 22 } },
         };
 
-#define add_noise_uv(x, y, grain)                                                    \
-            const int lx = (bx + x) << sx;                                           \
-            const int ly = y << sy;                                                  \
-            const pixel *const luma = luma_row + ly * PXSTRIDE(luma_stride) + lx;    \
+#define add_noise_uv(x, grain)                                                       \
+            const int lx = (bx + (x)) << sx;                                         \
+            const pixel *const luma = luma_base + lx;                                \
             pixel avg = luma[0];                                                     \
             if (sx)                                                                  \
                 avg = (avg + luma[1] + 1) >> 1;                                      \
-            const pixel *const src = src_row + (y) * PXSTRIDE(stride) + (bx + (x));  \
-            pixel *const dst = dst_row + (y) * PXSTRIDE(stride) + (bx + (x));        \
+            const pixel *const src = src_base + (x);                                 \
+            pixel *const dst = dst_base + (x);                                       \
             int val = avg;                                                           \
-            if (!data->chroma_scaling_from_luma) {                                   \
-                const int combined = avg * data->uv_luma_mult[uv] +                  \
-                               *src * data->uv_mult[uv];                             \
-                val = iclip_pixel( (combined >> 6) +                                 \
-                                   (data->uv_offset[uv] * (1 << bitdepth_min_8)) );  \
+            if (!chroma_scaling_from_luma) {                                         \
+                const int combined = avg * uv_luma_mult +                            \
+                               *src * uv_mult;                                       \
+                val = iclip_pixel( (combined >> 6) + uv_offset );                    \
             }                                                                        \
-            const int noise = round2(scaling[ val ] * (grain), data->scaling_shift); \
+            const int noise = round2(scaling[ val ] * (grain), scaling_shift);       \
             *dst = iclip(*src + noise, min_value, max_value);
 
         for (int y = ystart; y < bh; y++) {
+            const pixel *const luma_base = luma_row + (y << sy) * luma_pxstride;
+            const pixel *const src_base = src_row + y * pxstride + bx;
+            pixel *const dst_base = dst_row + y * pxstride + bx;
+
             // Non-overlapped image region (straightforward)
             for (int x = xstart; x < bw; x++) {
                 int grain = sample_lut(grain_lut, offsets, sx, sy, 0, 0, x, y);
-                add_noise_uv(x, y, grain);
+                add_noise_uv(x, grain);
             }
 
             // Special case for overlapped column
@@ -364,18 +386,22 @@ fguv_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
                 int old   = sample_lut(grain_lut, offsets, sx, sy, 1, 0, x, y);
                 grain = round2(old * w[sx][x][0] + grain * w[sx][x][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_uv(x, y, grain);
+                add_noise_uv(x, grain);
             }
         }
 
         for (int y = 0; y < ystart; y++) {
+            const pixel *const luma_base = luma_row + (y << sy) * luma_pxstride;
+            const pixel *const src_base = src_row + y * pxstride + bx;
+            pixel *const dst_base = dst_row + y * pxstride + bx;
+
             // Special case for overlapped row (sans corner)
             for (int x = xstart; x < bw; x++) {
                 int grain = sample_lut(grain_lut, offsets, sx, sy, 0, 0, x, y);
                 int old   = sample_lut(grain_lut, offsets, sx, sy, 0, 1, x, y);
                 grain = round2(old * w[sy][y][0] + grain * w[sy][y][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_uv(x, y, grain);
+                add_noise_uv(x, grain);
             }
 
             // Special case for doubly-overlapped corner
@@ -395,9 +421,10 @@ fguv_32x32xn_c(pixel *const dst_row, const pixel *const src_row,
                 // Mix the row rows together and apply to image
                 grain = round2(top * w[sy][y][0] + grain * w[sy][y][1], 5);
                 grain = iclip(grain, grain_min, grain_max);
-                add_noise_uv(x, y, grain);
+                add_noise_uv(x, grain);
             }
         }
+#undef add_noise_uv
     }
 }
 
