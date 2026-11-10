@@ -40,6 +40,7 @@ static NOINLINE void
 splat_dc(pixel *dst, const ptrdiff_t stride,
          const int width, const int height, const int dc HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
 #if BITDEPTH == 8
     assert(dc <= 0xff);
     if (width > 4) {
@@ -47,14 +48,14 @@ splat_dc(pixel *dst, const ptrdiff_t stride,
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x += sizeof(dcN))
                 *((uint64_t *) &dst[x]) = dcN;
-            dst += PXSTRIDE(stride);
+            dst += stride_px;
         }
     } else {
         const unsigned dcN = dc * 0x01010101U;
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x += sizeof(dcN))
                 *((unsigned *) &dst[x]) = dcN;
-            dst += PXSTRIDE(stride);
+            dst += stride_px;
         }
     }
 #else
@@ -63,7 +64,7 @@ splat_dc(pixel *dst, const ptrdiff_t stride,
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x += sizeof(dcN) >> 1)
             *((uint64_t *) &dst[x]) = dcN;
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 #endif
 }
@@ -73,13 +74,14 @@ cfl_pred(pixel *dst, const ptrdiff_t stride,
          const int width, const int height, const int dc,
          const int16_t *ac, const int alpha HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             const int diff = alpha * ac[x];
             dst[x] = iclip_pixel(dc + apply_sign((abs(diff) + 32) >> 6, diff));
         }
         ac += width;
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -223,9 +225,10 @@ static void ipred_v_c(pixel *dst, const ptrdiff_t stride,
                       const int max_width, const int max_height
                       HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int y = 0; y < height; y++) {
         pixel_copy(dst, topleft + 1, width);
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -235,9 +238,10 @@ static void ipred_h_c(pixel *dst, const ptrdiff_t stride,
                       const int max_width, const int max_height
                       HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int y = 0; y < height; y++) {
         pixel_set(dst, topleft[-(1 + y)], width);
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -247,6 +251,7 @@ static void ipred_paeth_c(pixel *dst, const ptrdiff_t stride,
                           const int max_width, const int max_height
                           HIGHBD_DECL_SUFFIX)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     const int topleft = tl_ptr[0];
     for (int y = 0; y < height; y++) {
         const int left = tl_ptr[-(y + 1)];
@@ -260,7 +265,7 @@ static void ipred_paeth_c(pixel *dst, const ptrdiff_t stride,
             dst[x] = ldiff <= tdiff && ldiff <= tldiff ? left :
                      tdiff <= tldiff ? top : topleft;
         }
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -273,16 +278,20 @@ static void ipred_smooth_c(pixel *dst, const ptrdiff_t stride,
     const uint8_t *const weights_hor = &dav1d_sm_weights[width];
     const uint8_t *const weights_ver = &dav1d_sm_weights[height];
     const int right = topleft[width], bottom = topleft[-height];
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
 
     for (int y = 0; y < height; y++) {
+        const int wy = weights_ver[y];
+        const int wy_bottom = (256 - wy) * bottom;
+        const int tl_y = topleft[-(1 + y)];
         for (int x = 0; x < width; x++) {
-            const int pred = weights_ver[y]  * topleft[1 + x] +
-                      (256 - weights_ver[y]) * bottom +
-                             weights_hor[x]  * topleft[-(1 + y)] +
-                      (256 - weights_hor[x]) * right;
+            const int pred = wy * topleft[1 + x] +
+                             wy_bottom +
+                             weights_hor[x] * tl_y +
+                             (256 - weights_hor[x]) * right;
             dst[x] = (pred + 256) >> 9;
         }
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -294,14 +303,16 @@ static void ipred_smooth_v_c(pixel *dst, const ptrdiff_t stride,
 {
     const uint8_t *const weights_ver = &dav1d_sm_weights[height];
     const int bottom = topleft[-height];
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
 
     for (int y = 0; y < height; y++) {
+        const int wy = weights_ver[y];
+        const int wy_bottom = (256 - wy) * bottom;
         for (int x = 0; x < width; x++) {
-            const int pred = weights_ver[y]  * topleft[1 + x] +
-                      (256 - weights_ver[y]) * bottom;
+            const int pred = wy * topleft[1 + x] + wy_bottom;
             dst[x] = (pred + 128) >> 8;
         }
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -313,14 +324,16 @@ static void ipred_smooth_h_c(pixel *dst, const ptrdiff_t stride,
 {
     const uint8_t *const weights_hor = &dav1d_sm_weights[width];
     const int right = topleft[width];
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
 
     for (int y = 0; y < height; y++) {
+        const int tl_y = topleft[-(y + 1)];
         for (int x = 0; x < width; x++) {
-            const int pred = weights_hor[x]  * topleft[-(y + 1)] +
-                      (256 - weights_hor[x]) * right;
+            const int pred = weights_hor[x] * tl_y +
+                             (256 - weights_hor[x]) * right;
             dst[x] = (pred + 128) >> 8;
         }
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
@@ -442,8 +455,9 @@ static void ipred_z1_c(pixel *dst, const ptrdiff_t stride,
         }
     }
     const int base_inc = 1 + upsample_above;
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int y = 0, xpos = dx; y < height;
-         y++, dst += PXSTRIDE(stride), xpos += dx)
+         y++, dst += stride_px, xpos += dx)
     {
         const int frac = xpos & 0x3E;
 
@@ -514,13 +528,15 @@ static void ipred_z2_c(pixel *dst, const ptrdiff_t stride,
 
     const int base_inc_x = 1 + upsample_above;
     const pixel *const left = &topleft[-(1 + upsample_left)];
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
+    const int y_shift = 6 + upsample_left;
     for (int y = 0, xpos = ((1 + upsample_above) << 6) - dx; y < height;
-         y++, xpos -= dx, dst += PXSTRIDE(stride))
+         y++, xpos -= dx, dst += stride_px)
     {
         int base_x = xpos >> 6;
         const int frac_x = xpos & 0x3E;
 
-        for (int x = 0, ypos = (y << (6 + upsample_left)) - dy; x < width;
+        for (int x = 0, ypos = (y << y_shift) - dy; x < width;
              x++, base_x += base_inc_x, ypos -= dy)
         {
             int v;
@@ -580,6 +596,7 @@ static void ipred_z3_c(pixel *dst, const ptrdiff_t stride,
         }
     }
     const int base_inc = 1 + upsample_left;
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int x = 0, ypos = dy; x < width; x++, ypos += dy) {
         const int frac = ypos & 0x3E;
 
@@ -587,10 +604,10 @@ static void ipred_z3_c(pixel *dst, const ptrdiff_t stride,
             if (base < max_base_y) {
                 const int v = left[-base] * (64 - frac) +
                               left[-(base + 1)] * frac;
-                dst[y * PXSTRIDE(stride) + x] = (v + 32) >> 6;
+                dst[y * stride_px + x] = (v + 32) >> 6;
             } else {
                 do {
-                    dst[y * PXSTRIDE(stride) + x] = left[-max_base_y];
+                    dst[y * stride_px + x] = left[-max_base_y];
                 } while (++y < height);
                 break;
             }
@@ -665,20 +682,23 @@ cfl_ac_c(int16_t *ac, const pixel *ypx, const ptrdiff_t stride,
     assert(w_pad >= 0 && w_pad * 4 < width);
     assert(h_pad >= 0 && h_pad * 4 < height);
 
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
+    const ptrdiff_t ypx_step = stride_px << ss_ver;
+
     for (y = 0; y < height - 4 * h_pad; y++) {
         for (x = 0; x < width - 4 * w_pad; x++) {
             int ac_sum = ypx[x << ss_hor];
             if (ss_hor) ac_sum += ypx[x * 2 + 1];
             if (ss_ver) {
-                ac_sum += ypx[(x << ss_hor) + PXSTRIDE(stride)];
-                if (ss_hor) ac_sum += ypx[x * 2 + 1 + PXSTRIDE(stride)];
+                ac_sum += ypx[(x << ss_hor) + stride_px];
+                if (ss_hor) ac_sum += ypx[x * 2 + 1 + stride_px];
             }
             ac[x] = ac_sum << (1 + !ss_ver + !ss_hor);
         }
         for (; x < width; x++)
             ac[x] = ac[x - 1];
         ac += width;
-        ypx += PXSTRIDE(stride) << ss_ver;
+        ypx += ypx_step;
     }
     for (; y < height; y++) {
         memcpy(ac, &ac[-width], width * sizeof(*ac));
@@ -718,6 +738,7 @@ static void pal_pred_c(pixel *dst, const ptrdiff_t stride,
                        const pixel *const pal, const uint8_t *idx,
                        const int w, const int h)
 {
+    const ptrdiff_t stride_px = PXSTRIDE(stride);
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x += 2) {
             const int i = *idx++;
@@ -725,7 +746,7 @@ static void pal_pred_c(pixel *dst, const ptrdiff_t stride,
             dst[x + 0] = pal[i & 7];
             dst[x + 1] = pal[i >> 4];
         }
-        dst += PXSTRIDE(stride);
+        dst += stride_px;
     }
 }
 
