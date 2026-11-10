@@ -50,12 +50,15 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
     const int round_bits_h = 3 + (bitdepth == 12) * 2;
     const int rounding_off_h = 1 << (round_bits_h - 1);
     const int clip_limit = 1 << (bitdepth + 1 + 7 - round_bits_h);
+    const int max_clip = clip_limit - 1;
+    const int base_sum = 1 << (bitdepth + 6);
+    const int last_src = src[w - 1];
 
     if (w < 6) {
         // For small widths, do the fully conditional loop with
         // conditions on each access.
         for (int x = 0; x < w; x++) {
-            int sum = (1 << (bitdepth + 6));
+            int sum = base_sum;
 #if BITDEPTH == 8
             sum += src[x] * 128;
 #endif
@@ -69,11 +72,11 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
                     else
                         sum += src[idx] * fh[i];
                 } else if (idx >= w && !(edges & LR_HAVE_RIGHT)) {
-                    sum += src[w - 1] * fh[i];
+                    sum += last_src * fh[i];
                 } else
                     sum += src[idx] * fh[i];
             }
-            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, max_clip);
             dst[x] = sum;
         }
 
@@ -86,7 +89,7 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
     if (!(edges & LR_HAVE_LEFT)) {
         // If there's no left edge, pad using the leftmost pixel.
         for (int x = 0; x < 3; x++) {
-            int sum = (1 << (bitdepth + 6));
+            int sum = base_sum;
 #if BITDEPTH == 8
             sum += src[x] * 128;
 #endif
@@ -97,13 +100,13 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
                 else
                     sum += src[idx] * fh[i];
             }
-            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, max_clip);
             dst[x] = sum;
         }
     } else if (left) {
         // If we have the left edge and a separate left buffer, pad using that.
         for (int x = 0; x < 3; x++) {
-            int sum = (1 << (bitdepth + 6));
+            int sum = base_sum;
 #if BITDEPTH == 8
             sum += src[x] * 128;
 #endif
@@ -114,7 +117,7 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
                 else
                     sum += src[idx] * fh[i];
             }
-            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+            sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, max_clip);
             dst[x] = sum;
         }
     } else {
@@ -129,7 +132,7 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
 
     // Do a condititon free loop for the bulk of the row.
     for (int x = start; x < end; x++) {
-        int sum = (1 << (bitdepth + 6));
+        int sum = base_sum;
 #if BITDEPTH == 8
         sum += src[x] * 128;
 #endif
@@ -137,25 +140,25 @@ static void wiener_filter_h(uint16_t *dst, const pixel (*left)[4],
             int idx = x + i - 3;
             sum += src[idx] * fh[i];
         }
-        sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+        sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, max_clip);
         dst[x] = sum;
     }
 
     // If we need to, calculate the end of the row with a condition for
     // right edge padding.
     for (int x = end; x < w; x++) {
-        int sum = (1 << (bitdepth + 6));
+        int sum = base_sum;
 #if BITDEPTH == 8
         sum += src[x] * 128;
 #endif
         for (int i = 0; i < 7; i++) {
             int idx = x + i - 3;
             if (idx >= w)
-                sum += src[w - 1] * fh[i];
+                sum += last_src * fh[i];
             else
                 sum += src[idx] * fh[i];
         }
-        sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, clip_limit - 1);
+        sum = iclip((sum + rounding_off_h) >> round_bits_h, 0, max_clip);
         dst[x] = sum;
     }
 }
@@ -262,7 +265,8 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
     const int16_t (*const filter)[8] = params->filter;
     const int16_t *fh = params->filter[0];
     const int16_t *fv = params->filter[1];
-    const pixel *lpf_bottom = lpf + 6*PXSTRIDE(stride);
+    const ptrdiff_t pxstride = PXSTRIDE(stride);
+    const pixel *lpf_bottom = lpf + 6 * pxstride;
 
     const pixel *src = p;
     if (edges & LR_HAVE_TOP) {
@@ -274,12 +278,12 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         ptrs[5] = rows[2];
 
         wiener_filter_h(rows[0], NULL, lpf, fh, w, edges HIGHBD_TAIL_SUFFIX);
-        lpf += PXSTRIDE(stride);
+        lpf += pxstride;
         wiener_filter_h(rows[1], NULL, lpf, fh, w, edges HIGHBD_TAIL_SUFFIX);
 
         wiener_filter_h(rows[2], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v1;
@@ -287,7 +291,7 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         ptrs[4] = ptrs[5] = rows[3];
         wiener_filter_h(rows[3], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v2;
@@ -295,7 +299,7 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         ptrs[5] = rows[4];
         wiener_filter_h(rows[4], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v3;
@@ -309,7 +313,7 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
 
         wiener_filter_h(rows[0], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v1;
@@ -317,7 +321,7 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         ptrs[4] = ptrs[5] = rows[1];
         wiener_filter_h(rows[1], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v2;
@@ -325,7 +329,7 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         ptrs[5] = rows[2];
         wiener_filter_h(rows[2], left, src, fh, w, edges HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
+        src += pxstride;
 
         if (--h <= 0)
             goto v3;
@@ -334,8 +338,8 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         wiener_filter_hv(p, ptrs, left, src, filter, w, edges
                          HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
-        p += PXSTRIDE(stride);
+        src += pxstride;
+        p += pxstride;
 
         if (--h <= 0)
             goto v3;
@@ -344,8 +348,8 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         wiener_filter_hv(p, ptrs, left, src, filter, w, edges
                          HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
-        p += PXSTRIDE(stride);
+        src += pxstride;
+        p += pxstride;
 
         if (--h <= 0)
             goto v3;
@@ -356,8 +360,8 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
         wiener_filter_hv(p, ptrs, left, src, filter, w, edges
                          HIGHBD_TAIL_SUFFIX);
         left++;
-        src += PXSTRIDE(stride);
-        p += PXSTRIDE(stride);
+        src += pxstride;
+        p += pxstride;
     } while (--h > 0);
 
     if (!(edges & LR_HAVE_BOTTOM))
@@ -365,12 +369,12 @@ static void wiener_c(pixel *p, const ptrdiff_t stride,
 
     wiener_filter_hv(p, ptrs, NULL, lpf_bottom, filter, w, edges
                      HIGHBD_TAIL_SUFFIX);
-    lpf_bottom += PXSTRIDE(stride);
-    p += PXSTRIDE(stride);
+    lpf_bottom += pxstride;
+    p += pxstride;
 
     wiener_filter_hv(p, ptrs, NULL, lpf_bottom, filter, w, edges
                      HIGHBD_TAIL_SUFFIX);
-    p += PXSTRIDE(stride);
+    p += pxstride;
 v1:
     wiener_filter_v(p, ptrs, fv, w HIGHBD_TAIL_SUFFIX);
 
@@ -378,10 +382,10 @@ v1:
 
 v3:
     wiener_filter_v(p, ptrs, fv, w HIGHBD_TAIL_SUFFIX);
-    p += PXSTRIDE(stride);
+    p += pxstride;
 v2:
     wiener_filter_v(p, ptrs, fv, w HIGHBD_TAIL_SUFFIX);
-    p += PXSTRIDE(stride);
+    p += pxstride;
     goto v1;
 }
 
@@ -417,10 +421,11 @@ static NOINLINE void sgr_box3_row_h(int32_t *sumsq, coef *sum,
 {
     sumsq++;
     sum++;
+    const int last_src = src[w - 1];
     int a = edges & LR_HAVE_LEFT ? (left ? left[0][2] : src[-2]) : src[0];
     int b = edges & LR_HAVE_LEFT ? (left ? left[0][3] : src[-1]) : src[0];
     for (int x = -1; x < w + 1; x++) {
-        int c = (x + 1 < w || (edges & LR_HAVE_RIGHT)) ? src[x + 1] : src[w - 1];
+        int c = (x + 1 < w || (edges & LR_HAVE_RIGHT)) ? src[x + 1] : last_src;
         sum[x] = a + b + c;
         sumsq[x] = a * a + b * b + c * c;
         a = b;
@@ -435,12 +440,13 @@ static NOINLINE void sgr_box5_row_h(int32_t *sumsq, coef *sum,
 {
     sumsq++;
     sum++;
+    const int last_src = src[w - 1];
     int a = edges & LR_HAVE_LEFT ? (left ? left[0][1] : src[-3]) : src[0];
     int b = edges & LR_HAVE_LEFT ? (left ? left[0][2] : src[-2]) : src[0];
     int c = edges & LR_HAVE_LEFT ? (left ? left[0][3] : src[-1]) : src[0];
     int d = src[0];
     for (int x = -1; x < w + 1; x++) {
-        int e = (x + 2 < w || (edges & LR_HAVE_RIGHT)) ? src[x + 2] : src[w - 1];
+        int e = (x + 2 < w || (edges & LR_HAVE_RIGHT)) ? src[x + 2] : last_src;
         sum[x] = a + b + c + d + e;
         sumsq[x] = a * a + b * b + c * c + d * d + e * e;
         a = b;
@@ -500,11 +506,13 @@ static NOINLINE void sgr_calc_row_ab(int32_t *AA, coef *BB, int w, int s,
                                      int bitdepth_max, int n, int sgr_one_by_x)
 {
     const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
+    const int a_shift = 2 * bitdepth_min_8;
+    const int a_rnd = (1 << a_shift) >> 1;
+    const int b_shift = bitdepth_min_8;
+    const int b_rnd = (1 << b_shift) >> 1;
     for (int i = 0; i < w + 2; i++) {
-        const int a =
-            (AA[i] + ((1 << (2 * bitdepth_min_8)) >> 1)) >> (2 * bitdepth_min_8);
-        const int b =
-            (BB[i] + ((1 << bitdepth_min_8) >> 1)) >> bitdepth_min_8;
+        const int a = (AA[i] + a_rnd) >> a_shift;
+        const int b = (BB[i] + b_rnd) >> b_shift;
 
         const unsigned p = imax(a * n - b * b, 0);
         const unsigned z = (p * s + (1 << 19)) >> 20;
