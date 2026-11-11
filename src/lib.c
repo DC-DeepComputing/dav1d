@@ -641,12 +641,12 @@ static COLD void close_internal(Dav1dContext **const c_out, int flush) {
 
         // clean-up threading stuff
         if (c->n_fc > 1) {
-            dav1d_free(f->tile_thread.lowest_pixel_mem);
-            dav1d_free(f->frame_thread.b);
+            dav1d_free_aligned(f->tile_thread.lowest_pixel_mem);
+            dav1d_free_aligned(f->frame_thread.b);
             dav1d_free_aligned(f->frame_thread.cbi);
             dav1d_free_aligned(f->frame_thread.pal_idx);
             dav1d_free_aligned(f->frame_thread.cf);
-            dav1d_free(f->frame_thread.tile_start_off);
+            dav1d_free_aligned(f->frame_thread.tile_start_off);
             dav1d_free_aligned(f->frame_thread.pal);
         }
         if (c->n_tc > 1) {
@@ -659,13 +659,13 @@ static COLD void close_internal(Dav1dContext **const c_out, int flush) {
         dav1d_free(f->task_thread.tile_tasks[0]);
         dav1d_free_aligned(f->ts);
         dav1d_free_aligned(f->ipred_edge[0]);
-        dav1d_free(f->a);
-        dav1d_free(f->tile);
-        dav1d_free(f->lf.mask);
+        dav1d_free_aligned(f->a);
+        dav1d_free_aligned(f->tile);
+        dav1d_free_aligned(f->lf.mask);
         dav1d_free_aligned(f->lf.level[0]);
-        dav1d_free(f->lf.lr_mask);
-        dav1d_free(f->lf.tx_lpf_right_edge[0]);
-        dav1d_free(f->lf.start_of_tile_row);
+        dav1d_free_aligned(f->lf.lr_mask);
+        dav1d_free_aligned(f->lf.tx_lpf_right_edge[0]);
+        dav1d_free_aligned(f->lf.start_of_tile_row);
         dav1d_free_aligned(f->rf.r);
         dav1d_free_aligned(f->lf.cdef_line_buf);
         dav1d_free_aligned(f->lf.lr_line_buf);
