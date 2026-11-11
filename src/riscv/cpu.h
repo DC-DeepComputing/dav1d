@@ -32,10 +32,17 @@ enum CpuFlags {
     DAV1D_RISCV_CPU_FLAG_V = 1 << 0,
 };
 
+EXTERN unsigned dav1d_vlen_max;
+
 unsigned dav1d_get_cpu_flags_riscv(void);
 
 int dav1d_get_vlenb(void);
 
-#define dav1d_get_vlen() (dav1d_get_vlenb()*8)
+DAV1D_API void dav1d_set_vlen_max(unsigned max);
+
+static ALWAYS_INLINE unsigned dav1d_get_vlen(void) {
+    unsigned vlen = dav1d_get_vlenb()*8;
+    return vlen < dav1d_vlen_max ? vlen : dav1d_vlen_max;
+}
 
 #endif /* DAV1D_SRC_RISCV_CPU_H */
