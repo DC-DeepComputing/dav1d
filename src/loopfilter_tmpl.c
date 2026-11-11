@@ -41,9 +41,13 @@ loop_filter(pixel *dst, int E, int I, int H,
 {
     const int bitdepth_min_8 = bitdepth_from_max(bitdepth_max) - 8;
     const int F = 1 << bitdepth_min_8;
-    E <<= bitdepth_min_8;
-    I <<= bitdepth_min_8;
-    H <<= bitdepth_min_8;
+    const int E_shl = E << bitdepth_min_8;
+    const int I_shl = I << bitdepth_min_8;
+    const int H_shl = H << bitdepth_min_8;
+    const int min_clip = -(128 << bitdepth_min_8);
+    const int max_clip = (128 << bitdepth_min_8) - 1;
+
+#define iclip_diff(v) iclip(v, min_clip, max_clip)
 
     for (int i = 0; i < 4; i++, dst += stridea) {
         int p6, p5, p4, p3, p2;
@@ -52,20 +56,20 @@ loop_filter(pixel *dst, int E, int I, int H,
         int q2, q3, q4, q5, q6;
         int fm, flat8out, flat8in;
 
-        fm = abs(p1 - p0) <= I && abs(q1 - q0) <= I &&
-             abs(p0 - q0) * 2 + (abs(p1 - q1) >> 1) <= E;
+        fm = abs(p1 - p0) <= I_shl && abs(q1 - q0) <= I_shl &&
+             abs(p0 - q0) * 2 + (abs(p1 - q1) >> 1) <= E_shl;
 
         if (wd > 4) {
             p2 = dst[strideb * -3];
             q2 = dst[strideb * +2];
 
-            fm &= abs(p2 - p1) <= I && abs(q2 - q1) <= I;
+            fm &= abs(p2 - p1) <= I_shl && abs(q2 - q1) <= I_shl;
 
             if (wd > 6) {
                 p3 = dst[strideb * -4];
                 q3 = dst[strideb * +3];
 
-                fm &= abs(p3 - p2) <= I && abs(q3 - q2) <= I;
+                fm &= abs(p3 - p2) <= I_shl && abs(q3 - q2) <= I_shl;
             }
         }
         if (!fm) continue;
@@ -128,25 +132,22 @@ loop_filter(pixel *dst, int E, int I, int H,
             dst[strideb * +0] = (p1 + 2 * p0 + 2 * q0 + 2 * q1 + q2 + 4) >> 3;
             dst[strideb * +1] = (p0 + 2 * q0 + 2 * q1 + 2 * q2 + q2 + 4) >> 3;
         } else {
-            const int hev = abs(p1 - p0) > H || abs(q1 - q0) > H;
-
-#define iclip_diff(v) iclip(v, -128 * (1 << bitdepth_min_8), \
-                                128 * (1 << bitdepth_min_8) - 1)
+            const int hev = abs(p1 - p0) > H_shl || abs(q1 - q0) > H_shl;
 
             if (hev) {
                 int f = iclip_diff(p1 - q1), f1, f2;
                 f = iclip_diff(3 * (q0 - p0) + f);
 
-                f1 = imin(f + 4, (128 << bitdepth_min_8) - 1) >> 3;
-                f2 = imin(f + 3, (128 << bitdepth_min_8) - 1) >> 3;
+                f1 = imin(f + 4, max_clip) >> 3;
+                f2 = imin(f + 3, max_clip) >> 3;
 
                 dst[strideb * -1] = iclip_pixel(p0 + f2);
                 dst[strideb * +0] = iclip_pixel(q0 - f1);
             } else {
                 int f = iclip_diff(3 * (q0 - p0));
 
-                const int f1 = imin(f + 4, (128 << bitdepth_min_8) - 1) >> 3;
-                const int f2 = imin(f + 3, (128 << bitdepth_min_8) - 1) >> 3;
+                const int f1 = imin(f + 4, max_clip) >> 3;
+                const int f2 = imin(f + 3, max_clip) >> 3;
 
                 dst[strideb * -1] = iclip_pixel(p0 + f2);
                 dst[strideb * +0] = iclip_pixel(q0 - f1);
@@ -155,9 +156,9 @@ loop_filter(pixel *dst, int E, int I, int H,
                 dst[strideb * -2] = iclip_pixel(p1 + f);
                 dst[strideb * +1] = iclip_pixel(q1 - f);
             }
-#undef iclip_diff
         }
     }
+#undef iclip_diff
 }
 
 static void loop_filter_h_sb128y_c(pixel *dst, const ptrdiff_t stride,
