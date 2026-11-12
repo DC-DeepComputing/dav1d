@@ -225,6 +225,7 @@ if host_machine.cpu_family().startswith('wasm')
     stdatomic_dependencies += thread_dependency.partial_dependency(compile_args: true)
 endif
 
+cdata.set10('HAVE_STDBIT_H', cc.check_header('stdbit.h'))
 cdata.set10('HAVE_SYS_TYPES_H', cc.check_header('sys/types.h'))
 cdata.set10('HAVE_UNISTD_H', cc.check_header('unistd.h'))
 cdata.set10('HAVE_IO_H', cc.check_header('io.h'))

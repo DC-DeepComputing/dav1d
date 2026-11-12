@@ -149,7 +149,21 @@
 #    define dav1d_uninit(x) x
 #endif
 
-#if defined(_MSC_VER) && !defined(__clang__)
+#if HAVE_STDBIT_H
+#include <stdbit.h>
+
+static inline int ctz(const unsigned int mask) {
+    return stdc_trailing_zeros_ui(mask);
+}
+
+static inline int clz(const unsigned int mask) {
+    return stdc_leading_zeros_ui(mask);
+}
+
+static inline int clzll(const unsigned long long mask) {
+    return stdc_leading_zeros_ull(mask);
+}
+#elif defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
 
 static inline int ctz(const unsigned int mask) {
@@ -178,7 +192,7 @@ static inline int clzll(const unsigned long long mask) {
         return clz((unsigned)mask) + 32;
 }
 #endif /* _WIN64 */
-#else /* !_MSC_VER */
+#else
 static inline int ctz(const unsigned int mask) {
     return __builtin_ctz(mask);
 }
@@ -190,7 +204,7 @@ static inline int clz(const unsigned int mask) {
 static inline int clzll(const unsigned long long mask) {
     return __builtin_clzll(mask);
 }
-#endif /* !_MSC_VER */
+#endif
 
 #ifndef static_assert
 #define CHECK_OFFSET(type, field, name) \

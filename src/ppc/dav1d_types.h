@@ -33,16 +33,16 @@
 
 #define u8x16 vector unsigned char
 #define i8x16 vector signed char
-#define b8x16 vector bool char
+#define b8x16 vector __bool char
 #define u16x8 vector unsigned short
 #define i16x8 vector signed short
-#define b16x8 vector bool short
+#define b16x8 vector __bool short
 #define u32x4 vector unsigned int
 #define i32x4 vector signed int
-#define b32x4 vector bool int
+#define b32x4 vector __bool int
 #define u64x2 vector unsigned long long
 #define i64x2 vector signed long long
-#define b64x2 vector bool long long
+#define b64x2 vector __bool long long
 
 #define i8h_to_i16(v) ((i16x8) vec_unpackh((i8x16)v))
 #define i8l_to_i16(v) ((i16x8) vec_unpackl((i8x16)v))
