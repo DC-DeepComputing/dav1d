@@ -65,7 +65,7 @@ cond_shuf512:  db  3,  3,  3,  3,  7,  7,  7,  7,  7,  7,  7,  7,  3,  3,  3,  3
 save_cond0:    db  0x80, 0x81, 0x82, 0x83, 0x89, 0x84, 0x00, 0x00
 save_cond1:    db  0x84, 0x85, 0x86, 0x87, 0x88, 0x80, 0x00, 0x00
 pb_128:        times 16 db 128
-pq_8192:       dq 8192
+pd_8192:       times 4 dd 8192
 
 save_tmvs_ssse3_table: SAVE_TMVS_TABLE 2, 16, ssse3
                        SAVE_TMVS_TABLE 4,  8, ssse3
@@ -359,25 +359,23 @@ cglobal splat_mv, 4, 5, 3, rr, a, bx4, bw4, bh4
     RET
 
 %if ARCH_X86_64
-INIT_XMM sse4
 %macro PRECOMP_FRAC 1
-    pmovsxwd        m1, [mv_proj + %1*16 + 0]
-    pmovsxwd        m2, [mv_proj + %1*16 + 8]
-    pmulld          m1, m4
-    pmulld          m2, m4
-    punpckldq       m0, m1, m1
-    mova    [rsp+0x50 + %1*64 +  0], m0
-    punpckhdq       m0, m1, m1
-    mova    [rsp+0x50 + %1*64 + 16], m0
-    punpckldq       m0, m2, m2
-    mova    [rsp+0x50 + %1*64 + 32], m0
-    punpckhdq       m0, m2, m2
-    mova    [rsp+0x50 + %1*64 + 48], m0
+    movu            m1, [mv_proj + %1*16]
+    pmulhw          m5, m1, m0
+    pmullw          m1, m0
+    mova            m2, m1
+    punpcklwd       m1, m5
+    punpckhwd       m2, m5
+    psignd          m1, m4
+    psignd          m2, m4
+    mova    [rsp+0x50 + %1*32 +  0], m1
+    mova    [rsp+0x50 + %1*32 + 16], m2
 %endmacro
 
+INIT_XMM ssse3
 ; refmvs_frame *rf, int tile_row_idx,
 ; int col_start8, int col_end8, int row_start8, int row_end8
-cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
+cglobal load_tmvs, 6, 15, 6, -0x150, rf, tridx, xstart, xend, ystart, yend, \
                                     stride, rp_proj, roff, troff, \
                                     xendi, xstarti, iw8, ih8, dst
     xor           r14d, r14d
@@ -416,12 +414,31 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     add             r7, troffq      ; rp_proj + tile_row_offset
     mov             hd, yendd
     mov     [rsp+0x28], r7
+    mov            r9q, -16 * 8
+.init_row_ptrs:
+    mov [rsp+r9q+0x150], r7
+    add             r7, r12
+    add            r9q, 8
+    jnz .init_row_ptrs
     add           dstq, r13
     sub            w5q, r13
     sub             hd, ystartd
 .init_xloop_start:
     mov            x5q, w5q
-    test           w5b, 1
+    cmp            x5q, -20
+    jg .init_check_odd
+.init_4blk:
+    mov dword [dstq+x5q+ 0], 0x80008000
+    mov dword [dstq+x5q+ 5], 0x80008000
+    mov dword [dstq+x5q+10], 0x80008000
+    mov dword [dstq+x5q+15], 0x80008000
+    add            x5q, 20
+    cmp            x5q, -20
+    jle .init_4blk
+    test           x5q, x5q
+    jz .init_next_row
+.init_check_odd:
+    test           x5b, 1
     jz .init_2blk
     mov dword [dstq+x5q], 0x80008000
     add            x5q, 5
@@ -442,7 +459,8 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     jz .ret
     mov     [rsp+0x0c], r13d
     mov        strideq, [rsp+0x30]
-    movddup         m3, [pq_8192]
+    sub          xendd, xstartd
+    movu            m3, [pd_8192]
     mov            r9d, ystartd
     mov     [rsp+0x38], yendd
     mov     [rsp+0x20], xstartid
@@ -455,7 +473,7 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     mov     [rsp+0x24], ystartd
     mov     [rsp+0x00], r7
 .nloop:
- DEFINE_ARGS y, off, xstart, xend, ystart, rf, n7, refsign, \
+ DEFINE_ARGS y, off, xstart, xlen, ystart, rf, n7, refsign, \
              ref, rp_ref, xendi, xstarti, _, _, n
     mov            rfq, [rsp+0x48]
     movsx         refd, byte [rfq+rf.mfmv_ref2cur+nq]
@@ -463,7 +481,10 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     je .next_n
     mov     [rsp+0x40], refd
     movd            m4, refd
+    pabsw           m0, m4
     pshufd          m4, m4, 0
+    pshuflw         m0, m0, 0
+    punpcklqdq      m0, m0
     PRECOMP_FRAC 0
     PRECOMP_FRAC 1
     PRECOMP_FRAC 2
@@ -472,7 +493,8 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     movzx         refd, byte [rfq+rf.mfmv_ref+nq]
     lea       refsignq, [refq-4]
     mov        rp_refq, [rfq+rf.rp_ref]
-    movq            m2, refsignq
+    movd            m2, refsignd
+    pshufd          m2, m2, 0
     add           offq, [rp_refq+refq*8]    ; r = rp_ref[ref] + row_offset
     mov     [rsp+0x14], nd
     mov             yd, ystartd
@@ -488,7 +510,7 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     cmp           r12d, r14d
     cmovs         r14d, r12d                ; imin(y_sb_align + 8, yend)
     mov     [rsp+0x3c], r14d                ; y_proj_end
- DEFINE_ARGS y, src, xstart, xend, _, _, n7, mv, \
+ DEFINE_ARGS y, src, xstart, xlen, factor, _, n7, mv, \
              ref, x, xendi, mvx, mvy, rb, ref2ref
     mov             xd, [rsp+0x20] ; xstarti
     lea            rbd, [xq*5]
@@ -500,68 +522,88 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     movzx     ref2refd, byte [n7q+refq]     ; rf->mfmv_ref2ref[n][b_ref-1]
     test      ref2refd, ref2refd
     jz .next_x_bad_ref
+.xloop_same_ref:
     mov            mvd, [rbq]
-    pmovsxwq        m0, [rbq]
-    movddup         m1, [rsp+0x50+ref2refq*8]
-    pmuldq          m0, m1          ; mv * frac
-    pshufd          m1, m0, q3311
-    paddd           m0, m3
-    paddd           m0, m1
-    psrad           m0, 14          ; offset = (xy + (xy >> 31) + 8192) >> 14
-    pabsd           m1, m0
-    packssdw        m0, m0
-    psrld           m1, 6
-    packuswb        m1, m1
-    pxor            m0, m2          ; offset ^ ref_sign
-    psignd          m1, m0          ; apply_sign(abs(offset) >> 6, offset ^ refsign)
-    movq          mvxq, m1
-    lea           mvyd, [mvxq+yq]   ; ypos
-    sar           mvxq, 32
- DEFINE_ARGS y, src, xstart, xend, _, _, n7, mv, \
+    mov        factord, [rsp+0x50+ref2refq*4]
+    movsx         mvyd, mvw
+    movsx         mvxd, word [rbq+2]
+    imul          mvyd, factord
+    imul          mvxd, factord
+    movd            m0, mvyd
+    movd            m1, mvxd
+    punpckldq       m0, m1
+    psrad          m1, m0, 31
+    paddd          m0, m3
+    paddd          m0, m1
+    psrad          m0, 14          ; offset = (xy + (xy >> 31) + 8192) >> 14
+    pabsd          m1, m0
+    psrld          m1, 6
+    pxor           m0, m2          ; offset ^ ref_sign
+    psignd         m1, m0          ; apply_sign(abs(offset) >> 6, offset ^ refsign)
+    movq         mvxq, m1
+    lea          mvyd, [mvxq+yq]   ; ypos
+    sar          mvxq, 32
+ DEFINE_ARGS y, src, xstart, xlen, dst, _, n7, mv, \
              ref, x, xendi, mvx, ypos, rb, ref2ref
     cmp          yposd, [rsp+0x44] ; y_proj_start
     jl .next_x_bad_pos_y
     cmp          yposd, [rsp+0x3c] ; y_proj_end
     jge .next_x_bad_pos_y
     and          yposd, 15
-    add           mvxq, xq          ; xpos
-    imul         yposq, [rsp+0x30]  ; pos = (ypos & 15) * stride
- DEFINE_ARGS y, src, xstart, xend, dst, _, n7, mv, \
-             ref, x, xendi, xpos, pos, rb, ref2ref
-    mov           dstq, [rsp+0x28]  ; dst = rp_proj + tile_row_offset
-    add           posq, xposq       ; pos += xpos
-    lea           posq, [posq*5]
-    add           dstq, posq        ; dst += pos5
+    mov           dstq, [rsp+0xd0+yposq*8]  ; dst = rp_proj + tile_row_offset + (ypos & 15) * stride5
+ DEFINE_ARGS y, src, xstart, xlen, dst, _, n7, mv, \
+             ref, x, xendi, xpos, tmp, rb, ref2ref
+    lea          tmpd, [xposq+8]            ; offset_x + 8
+    add          xposq, xq                  ; xpos
+    lea            r5q, [xposq*5]           ; xpos * 5
+    add           dstq, r5q                 ; dst += xpos * 5
+    sub          xposd, xstartd             ; xpos relative to xstart
+    cmp          tmpd, 16
+    jbe .write_loop_entry_fast
     jmp .write_loop_entry
 .write_loop:
     add            rbq, 5
     cmp           refb, byte [rbq+4]
     jne .xloop
     cmp            mvd, [rbq]
-    jne .xloop
+    jne .xloop_same_ref
     add           dstq, 5
     inc          xposd
 .write_loop_entry:
-    mov           r12d, xd
-    and           r12d, ~7
-    lea            r5d, [r12-8]
-    cmp            r5d, xstartd
-    cmovs          r5d, xstartd     ; x_proj_start
-    cmp          xposd, r5d
-    jl .next_xpos
-    add           r12d, 16
-    cmp          xendd, r12d
-    cmovs         r12d, xendd       ; x_proj_end
-    cmp          xposd, r12d
-    jge .next_xpos
+    cmp          xposd, xlend
+    jae .next_xpos
+    mov           r5d, xd
+    and           r5d, 7
+    add           r5d, tmpd
+    cmp           r5d, 24
+    jae .next_xpos
     mov       [dstq+0], mvd
     mov  byte [dstq+4], ref2refb
 .next_xpos:
     inc             xd
     cmp             xd, xendid
     jl .write_loop
+    jmp .next_y
+
+.write_loop_fast:
+    add            rbq, 5
+    cmp           refb, byte [rbq+4]
+    jne .xloop
+    cmp            mvd, [rbq]
+    jne .xloop_same_ref
+    add           dstq, 5
+    inc          xposd
+.write_loop_entry_fast:
+    cmp          xposd, xlend
+    jae .next_xpos_fast
+    mov       [dstq+0], mvd
+    mov  byte [dstq+4], ref2refb
+.next_xpos_fast:
+    inc             xd
+    cmp             xd, xendid
+    jl .write_loop_fast
 .next_y:
- DEFINE_ARGS y, src, xstart, xend, ystart, _, n7, _, _, x, xendi, _, _, _, n
+ DEFINE_ARGS y, src, xstart, xlen, ystart, _, n7, _, _, x, xendi, _, _, _, n
     add           srcq, [rsp+0x18] ; stride5
     inc             yd
     cmp             yd, [rsp+0x38] ; yend
@@ -576,12 +618,12 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
 .ret:
     RET
 .next_x:
- DEFINE_ARGS y, src, xstart, xend, _, _, n7, mv, ref, x, xendi, _, _, rb, _
+ DEFINE_ARGS y, src, xstart, xlen, _, _, n7, mv, ref, x, xendi, _, _, rb, _
     add            rbq, 5
     cmp           refb, byte [rbq+4]
     jne .xloop
     cmp            mvd, [rbq]
-    jne .xloop
+    jne .xloop_same_ref
 .next_x_bad_pos_y:
     inc             xd
     cmp             xd, xendid
@@ -591,8 +633,10 @@ cglobal load_tmvs, 6, 15, 5, -0x150, rf, tridx, xstart, xend, ystart, yend, \
     add            rbq, 5
     inc             xd
     cmp             xd, xendid
-    jl .xloop
-    jmp .next_y
+    jge .next_y
+    cmp      byte [rbq+4], 0
+    jz .next_x_bad_ref
+    jmp .xloop
 
 INIT_YMM avx2
 ; refmvs_temporal_block *rp, ptrdiff_t stride,
