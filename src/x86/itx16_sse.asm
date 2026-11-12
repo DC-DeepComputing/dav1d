@@ -441,6 +441,7 @@ cglobal idct_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     IDCT4_1D              0, 1, 2, 3, 4, 6, 7, 5
     ret
 .pass2:
+    _CET_ENDBR
     ; m0 = in0 in1
     ; m1 = in2 in3
     ; m5 = pd_2048
@@ -501,6 +502,7 @@ cglobal iadst_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m5 = pd_2048
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
     ; m0 = in0 in1
     ; m1 = in2 in3
 %if ARCH_X86_32
@@ -535,6 +537,7 @@ cglobal iadst_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     RET
 ALIGN function_align
 .main:
+    _CET_ENDBR
     mova                 m1, [cq+16*2]
     mova                 m3, [cq+16*3]
     mova                 m5, [cq+16*0]
@@ -588,6 +591,7 @@ cglobal iflipadst_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m5 = pd_2048
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
     ; m0 = in0 in1
     ; m1 = in2 in3
 %if ARCH_X86_32
@@ -646,6 +650,7 @@ cglobal iidentity_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m5 = pd_2048
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
     ; m0 = in0 in1
     ; m1 = in2 in3
     ; m5 = pd_2048
@@ -742,6 +747,7 @@ cglobal idct_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m0-3 = packed & transposed output
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -835,6 +841,7 @@ cglobal iadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 .end_pass1:
     ret
 .pass2:
+    _CET_ENDBR
     shufps               m0, m0, q1032
     shufps               m1, m1, q1032
 %if ARCH_X86_32
@@ -864,6 +871,7 @@ cglobal iflipadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m0-3 = packed & transposed output
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
     shufps               m0, m0, q1032
     shufps               m1, m1, q1032
 %if ARCH_X86_32
@@ -932,6 +940,7 @@ cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m0-3 = packed & transposed output
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
     mova                 m4, [o(pw_4096)]
     jmp m(idct_4x8_internal_16bpc).end
 
@@ -1000,6 +1009,7 @@ cglobal idct_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m0-7 = packed & transposed output
     jmp                tx2q
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1099,6 +1109,7 @@ cglobal iadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     sub                 r5d, 16
     jmp .loop_pass1
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1172,6 +1183,7 @@ cglobal iflipadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     sub                 r5d, 16
     jmp .loop_pass1
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1245,6 +1257,7 @@ cglobal iidentity_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     sub                 r5d, 16
     jmp .loop_pass1
 .pass2:
+    _CET_ENDBR
     mova          [cq+16*4], m0
     mova          [cq+16*5], m1
     mova          [cq+16*6], m2
@@ -1368,6 +1381,7 @@ cglobal idct_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     punpcklwd            m0, m6
     ret
 .main:
+    _CET_ENDBR
     call .main_pass1
     call .round
     packssdw             m0, m1
@@ -1533,6 +1547,7 @@ cglobal idct_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1570,6 +1585,7 @@ cglobal iadst_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r5, [o(.main)]
     jmp m(idct_8x4_internal_16bpc).pass1_entry
 .main:
+    _CET_ENDBR
     call .main_pass1
     call .round
     packssdw             m0, m1
@@ -1707,6 +1723,7 @@ cglobal iadst_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1722,6 +1739,7 @@ cglobal iflipadst_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r5, [o(.main)]
     jmp m(idct_8x4_internal_16bpc).pass1_entry
 .main:
+    _CET_ENDBR
     call m(iadst_8x4_internal_16bpc).main_pass1
     call m(iadst_8x4_internal_16bpc).round
     packssdw             m7, m6
@@ -1734,6 +1752,7 @@ cglobal iflipadst_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m6, m1
     ret
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1752,6 +1771,7 @@ cglobal iidentity_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r5, [o(.main)]
     jmp m(idct_8x4_internal_16bpc).pass1_entry
 .main:
+    _CET_ENDBR
     REPX       {paddd x, x}, m0, m1, m2, m3, m4, m5, m6, m7
     packssdw             m0, m1
     packssdw             m2, m3
@@ -1759,6 +1779,7 @@ cglobal iidentity_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     packssdw             m6, m7
     ret
 .pass2:
+    _CET_ENDBR
     mova                 m7, [o(pw_1697x8)]
     pmulhrsw             m4, m7, m0
     pmulhrsw             m5, m7, m1
@@ -1877,12 +1898,14 @@ cglobal idct_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     jmp                tx2q
 .pass1_main:
+    _CET_ENDBR
     call m(idct_8x4_internal_16bpc).main_pass1
     pcmpeqd              m1, m1
     REPX      {psubd x, m1}, m0, m6, m5, m3
     call m(idct_8x4_internal_16bpc).round
     REPX      {psrad x, 1 }, m0, m1, m2, m3, m4, m5, m6, m7
 .pack_and_transpose:
+    _CET_ENDBR
     packssdw             m2, m3
     packssdw             m6, m7
     packssdw             m0, m1
@@ -1890,6 +1913,7 @@ cglobal idct_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_8x4_internal_16bpc).transpose4x8packed
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -1988,6 +2012,7 @@ cglobal iadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  t0, [o(.pass1_main)]
     jmp m(idct_8x8_internal_16bpc).pass1_full
 .pass1_main:
+    _CET_ENDBR
     call m(iadst_8x4_internal_16bpc).main_pass1
     call .round
     jmp m(idct_8x8_internal_16bpc).pack_and_transpose
@@ -2021,6 +2046,7 @@ cglobal iadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -2072,6 +2098,7 @@ cglobal iflipadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  t0, [o(.pass1_main)]
     jmp m(idct_8x8_internal_16bpc).pass1_full
 .pass1_main:
+    _CET_ENDBR
     call m(iadst_8x4_internal_16bpc).main_pass1
     call m(iadst_8x8_internal_16bpc).round
     ; invert registers
@@ -2086,6 +2113,7 @@ cglobal iflipadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_8x4_internal_16bpc).transpose4x8packed
 
 .pass2:
+    _CET_ENDBR
     lea                dstq, [dstq+strideq*8]
     sub                dstq, strideq
     neg             strideq
@@ -2117,6 +2145,7 @@ cglobal iidentity_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m_suffix(idct_8x8_internal_8bpc, _ssse3).pass1_end3
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -2218,6 +2247,7 @@ cglobal idct_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp                tx2q
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -2306,6 +2336,7 @@ cglobal iadst_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_8x16_internal_16bpc).pass1_full
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -2387,6 +2418,7 @@ cglobal iflipadst_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_8x16_internal_16bpc).pass1_full
 
 .pass2:
+    _CET_ENDBR
     lea                  r3, [strideq*3]
     lea                  r3, [r3*5]
     add                dstq, r3
@@ -2409,6 +2441,7 @@ cglobal iidentity_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_8x16_internal_16bpc).pass1_full
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m4, [o(pw_2048)]
     mova                 m5, [o(pixel_10bpc_max)]
@@ -2437,6 +2470,7 @@ cglobal iidentity_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 .end:
     RET
 .main:
+    _CET_ENDBR
     ; y = pmulhrsw(x, pw_1697x16); x = paddsw(x, x); x = paddsw(x, y)
 %if ARCH_X86_32
     mova                 m7, [o(pw_1697x16)]
@@ -2843,6 +2877,7 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
     lea                  r4, [o(m_suffix(idct_8x4_internal_8bpc, _ssse3).main)]
 .pass2_loop:
     lea                  r3, [strideq*3]
@@ -2897,6 +2932,7 @@ cglobal iadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
 
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m11, [o(pd_2048)]
     mova                m12, [o(clip_18b_min)]
@@ -3319,6 +3355,7 @@ cglobal iadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
     lea                  r4, [o(m_suffix(iadst_8x4_internal_8bpc, _ssse3).main)]
     jmp m(idct_16x4_internal_16bpc).pass2_loop
 
@@ -3371,6 +3408,7 @@ cglobal iflipadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
 
 .pass2:
+    _CET_ENDBR
     lea                  r3, [strideq*3]
     lea                dstq, [dstq+r3]
     neg             strideq
@@ -3445,12 +3483,14 @@ cglobal iidentity_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m12, [o(pw_1697x8)]
 %endif
     lea                  r4, [o(.main)]
     jmp m(idct_16x4_internal_16bpc).pass2_loop
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     pmulhrsw             m4, m0, m12
     pmulhrsw             m5, m1, m12
@@ -3550,6 +3590,7 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 
     jmp                tx2q
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m11, [o(pd_2048)]
     mova                m12, [o(clip_18b_min)]
@@ -3592,6 +3633,7 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     mov             strideq, [rsp+gprsize+12*16]
 %endif
@@ -3645,6 +3687,7 @@ cglobal iadst_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_16x8_internal_16bpc).loop_main
 
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m11, [o(pd_2048)]
     mova                m12, [o(clip_18b_min)]
@@ -3691,6 +3734,7 @@ cglobal iadst_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     mov             strideq, [rsp+gprsize+12*16]
 %endif
@@ -3744,6 +3788,7 @@ cglobal iflipadst_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  t0, [o(.main)]
     jmp m(idct_16x8_internal_16bpc).loop_main
 .main:
+    _CET_ENDBR
     call m(iadst_16x8_internal_16bpc).main
 %if ARCH_X86_64
     pshufd               m1, m0, q1032
@@ -3775,6 +3820,7 @@ cglobal iflipadst_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     mov             strideq, [rsp+gprsize+12*16]
 %endif
@@ -3798,6 +3844,7 @@ cglobal iidentity_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  t0, [o(.main)]
     jmp m(idct_16x8_internal_16bpc).loop_main
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m15, [o(pd_2896)]
     pmulld               m0, m15, [cq+ 0*32+r5]
@@ -3895,6 +3942,7 @@ cglobal iidentity_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     ret
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     mov             strideq, [rsp+gprsize+12*16]
 %endif
@@ -4020,6 +4068,7 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     jmp                tx2q
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m11, [o(pd_2048)]
     mova                m12, [o(clip_18b_min)]
@@ -4154,6 +4203,7 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m8, [o(pw_2048)]
     pxor                 m9, m9
@@ -4253,6 +4303,7 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_16x16_internal_16bpc).pass1_full
 
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m11, [o(pd_2048)]
     mova                m12, [o(clip_18b_min)]
@@ -4359,6 +4410,7 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     ret
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m8, [o(pw_2048)]
     mova                m11, [o(pw_m2048)]
@@ -4459,6 +4511,7 @@ cglobal iflipadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_16x16_internal_16bpc).pass1_full
 
 .main:
+    _CET_ENDBR
     call m(iadst_16x16_internal_16bpc).main
 %if ARCH_X86_64
     mova                 m1, m0
@@ -4490,6 +4543,7 @@ cglobal iflipadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
     lea                  r3, [strideq*3]
     lea                  r3, [r3*5]
     add                dstq, r3
@@ -4510,6 +4564,7 @@ cglobal iidentity_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m(idct_16x16_internal_16bpc).pass1_full
 
 .main:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                m15, [o(pd_11586)]
     pmulld               m0, m15, [cq+ 0*64+r5]
@@ -4588,6 +4643,7 @@ cglobal iidentity_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m4, [o(pw_2048)]
     mova                 m5, [o(pixel_10bpc_max)]
@@ -4666,6 +4722,7 @@ ALIGN function_align
 .main_zero:
     REPX {mova [cq+128*x], m6}, 0, 1, 2, 3, 4, 5, 6, 7
 .main:
+    _CET_ENDBR
     punpckhwd            m4, m0, m1
     punpcklwd            m0, m1
     punpckhwd            m1, m2, m3
@@ -4777,6 +4834,7 @@ cglobal inv_txfm_add_identity_identity_16x32_16bpc, 4, 7, 12, dst, stride, c, eo
     RET
 ALIGN function_align
 .main:
+    _CET_ENDBR
     mova                 m0, [cq+128*0]
     packssdw             m0, [cq+128*1]
     mova                 m1, [cq+128*2]
@@ -4865,6 +4923,7 @@ cglobal inv_txfm_add_identity_identity_32x16_16bpc, 4, 7, 11, dst, stride, c, eo
     RET
 ALIGN function_align
 .main:
+    _CET_ENDBR
     mova                 m0, [cq+64*0]
     packssdw             m0, [cq+64*1]
     mova                 m1, [cq+64*2]
@@ -4977,6 +5036,7 @@ ALIGN function_align
     sub                  cq, 128*8
     sub                dstq, 16
 .main:
+    _CET_ENDBR
     mova                 m0, [cq+128*0]
     packssdw             m0, [cq+128*1]
     mova                 m1, [cq+128*2]
@@ -5100,6 +5160,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 15, 0-36*16, \
     RET
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -6263,6 +6324,7 @@ cglobal inv_txfm_add_dct_dct_32x16_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
     RET
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m8, [o(pw_2048)]
     pxor                 m9, m9
@@ -6777,6 +6839,7 @@ cglobal inv_txfm_add_dct_dct_16x64_16bpc, 4, 7, 16, \
     RET
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_32
     lea                  r5, [o(itx8_start)]
 %endif
@@ -7227,6 +7290,7 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 16, 0-(64+8*ARCH_X86_32)*16, \
     RET
 
 .pass2:
+    _CET_ENDBR
 %if ARCH_X86_64
     mova                 m8, [o(pw_2048)]
     pxor                 m9, m9

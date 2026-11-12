@@ -509,6 +509,9 @@ if host_machine.cpu_family().startswith('x86')
 
     # Convert SSE asm into (128-bit) AVX when compiler flags are set to use AVX instructions
     cdata_asm.set10('FORCE_VEX_ENCODING', cc.get_define('__AVX__').strip() != '')
+
+    # Control-flow Enforcement Technology (CET) Indirect Branch Tracking (IBT)
+    cdata_asm.set10('IBT', true)
 endif
 
 cdata.set10('ARCH_PPC64LE', host_machine.cpu() == 'ppc64le')
