@@ -71,6 +71,7 @@ decl_fn(mct_scaled, dav1d_prep_8tap_scaled_sharp_smooth);
 decl_fn(mct_scaled, dav1d_prep_bilin_scaled);
 
 decl_fn(avg, dav1d_avg);
+decl_fn(avg_direct, dav1d_avg_direct);
 decl_fn(w_avg, dav1d_w_avg);
 decl_fn(mask, dav1d_mask);
 decl_fn(w_mask, dav1d_w_mask_420);
@@ -176,6 +177,7 @@ static ALWAYS_INLINE void mc_dsp_init_x86(Dav1dMCDSPContext *const c) {
     init_mct_scaled_fn(FILTER_2D_BILINEAR,            bilin_scaled,               avx2);
 
     c->avg = BF(dav1d_avg, avx2);
+    c->avg_direct = BF(dav1d_avg_direct, avx2);
     c->w_avg = BF(dav1d_w_avg, avx2);
     c->mask = BF(dav1d_mask, avx2);
     c->w_mask[0] = BF(dav1d_w_mask_444, avx2);

@@ -642,6 +642,27 @@ static void avg_c(pixel *dst, const ptrdiff_t dst_stride,
     } while (--h);
 }
 
+static void avg_direct_c(pixel *dst, const ptrdiff_t dst_stride,
+                         const pixel *src1, const ptrdiff_t src1_stride,
+                         const pixel *src2, const ptrdiff_t src2_stride,
+                         const int w, int h HIGHBD_DECL_SUFFIX)
+{
+    /* prep():  tmp = (src << intermediate_bits) - PREP_BIAS
+     * avg():   dst = (tmp1 + tmp2 + (1 << intermediate_bits) + 2*PREP_BIAS)
+     *                >> (intermediate_bits + 1)
+     * Substituting the first into the second, the PREP_BIAS terms cancel and
+     *          dst = (((a + b) << ib) + (1 << ib)) >> (ib + 1) = (a + b + 1) >> 1
+     * independently of bit depth. The result is bounded by max(a,b), so
+     * avg_c()'s iclip_pixel() is a no-op on this path. */
+    do {
+        for (int x = 0; x < w; x++)
+            dst[x] = (src1[x] + src2[x] + 1) >> 1;
+        dst += PXSTRIDE(dst_stride);
+        src1 += PXSTRIDE(src1_stride);
+        src2 += PXSTRIDE(src2_stride);
+    } while (--h);
+}
+
 static void w_avg_c(pixel *dst, const ptrdiff_t dst_stride,
                     const int16_t *tmp1, const int16_t *tmp2, const int w, int h,
                     const int weight HIGHBD_DECL_SUFFIX)
@@ -977,6 +998,7 @@ COLD void bitfn(dav1d_mc_dsp_init)(Dav1dMCDSPContext *const c) {
     init_mc_fns(FILTER_2D_BILINEAR,            bilin);
 
     c->avg      = avg_c;
+    c->avg_direct = avg_direct_c;
     c->w_avg    = w_avg_c;
     c->mask     = mask_c;
     c->blend    = blend_c;
