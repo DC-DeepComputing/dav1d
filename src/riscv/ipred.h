@@ -38,6 +38,10 @@ decl_angular_ipred_fn(BF(dav1d_ipred_dc_128, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_dc_top, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_dc_left, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_h, rvv));
+decl_angular_ipred_fn(BF(dav1d_ipred_h_vl128, rvv));
+decl_angular_ipred_fn(BF(dav1d_ipred_h_vl256, rvv));
+decl_angular_ipred_fn(BF(dav1d_ipred_h_vl512, rvv));
+decl_angular_ipred_fn(BF(dav1d_ipred_h_vl1024, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_v, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_paeth, rvv));
 decl_angular_ipred_fn(BF(dav1d_ipred_smooth, rvv));
@@ -62,7 +66,16 @@ static ALWAYS_INLINE void intra_pred_dsp_init_riscv(Dav1dIntraPredDSPContext *co
     c->intra_pred[DC_128_PRED  ] = dav1d_ipred_dc_128_8bpc_rvv;
     c->intra_pred[TOP_DC_PRED  ] = dav1d_ipred_dc_top_8bpc_rvv;
     c->intra_pred[LEFT_DC_PRED ] = dav1d_ipred_dc_left_8bpc_rvv;
-    c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_8bpc_rvv;
+
+    if (dav1d_get_vlen() == 128)
+    c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_vl128_8bpc_rvv;
+    else if (dav1d_get_vlen() == 256)
+    c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_vl256_8bpc_rvv;
+    else if (dav1d_get_vlen() == 512)
+    c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_vl512_8bpc_rvv;
+    else if (dav1d_get_vlen() >= 1024)
+    c->intra_pred[HOR_PRED     ] = dav1d_ipred_h_vl1024_8bpc_rvv;
+
     c->intra_pred[VERT_PRED    ] = dav1d_ipred_v_8bpc_rvv;
     c->intra_pred[PAETH_PRED   ] = dav1d_ipred_paeth_8bpc_rvv;
     c->intra_pred[SMOOTH_PRED  ] = dav1d_ipred_smooth_8bpc_rvv;
