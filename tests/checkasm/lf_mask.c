@@ -70,10 +70,62 @@ static void check_fill_levelcache_block(Dav1dLfMaskDSPContext *c)
     checkasm_report("fill_levelcache_block");
 }
 
+static void check_mask_edges_inter_outer(Dav1dLfMaskDSPContext *c)
+{
+    declare_func(void, uint8_t *a, uint8_t *l, int by4, int bx4, int w4, int h4,
+                 uint16_t (*masks)[32][3][2], const uint8_t txa[2][2][32][32]);
+
+    uint16_t c_masks_dst[2][32][3][2], a_masks_dst[2][32][3][2];
+    uint8_t c_a[32], c_l[32], a_a[32], a_l[32];
+
+    uint8_t txa[2][2][32][32];
+
+    for (int w4 = 1; w4 <= 32; ++w4) {
+        if (!check_func(c->mask_edges_inter_outer, "mask_edges_inter_outer"))
+            continue;
+        int h4 = rnd() % 32 + 1;
+        int bx4 = rnd() % (33 - w4), by4 = rnd() % (33 - h4);
+
+        memset(c_masks_dst, 0, sizeof(c_masks_dst));
+        memset(a_masks_dst, 0, sizeof(a_masks_dst));
+
+        for (int i = 0; i < 32; ++i) {
+            int r1 = rnd() % 3, r2 = rnd() % 3;
+            c_a[i] = a_a[i] = r1;
+            c_l[i] = a_l[i] = r2;
+        }
+
+        for (unsigned i = 0; i < sizeof txa; ++i)
+            *((uint8_t*)txa + i) = rnd() % 3;
+
+        checkasm_call_ref(c_a, c_l, by4, bx4, w4, h4, c_masks_dst, txa);
+        checkasm_call_new(a_a, a_l, by4, bx4, w4, h4, a_masks_dst, txa);
+
+
+        checkasm_check1d(uint16_t, (uint16_t*)c_masks_dst, (uint16_t*)a_masks_dst,
+                         sizeof(a_masks_dst) / sizeof(uint16_t), "masks");
+        checkasm_check1d(uint8_t, c_l, a_l, sizeof(c_l), "l");
+        checkasm_check1d(uint8_t, c_a, a_a, sizeof(c_a), "a");
+    }
+
+    for (int w4 = 1; w4 <= 32; w4 <<= 1) {
+        if (check_func(c->mask_edges_inter_outer,
+                       "mask_edges_inter_outer_w%d", w4)) {
+            int h4 = w4, bx4 = 0, by4 = 0;
+
+            bench_new(alternate(c_a, a_a), alternate(c_l, a_l), by4, bx4, w4, h4,
+                      alternate(c_masks_dst, a_masks_dst), txa);
+        }
+    }
+
+    checkasm_report("mask_edges_inter_outer");
+}
+
 void checkasm_check_lf_mask(void)
 {
     Dav1dLfMaskDSPContext c;
     dav1d_lf_mask_dsp_init(&c);
 
     check_fill_levelcache_block(&c);
+    check_mask_edges_inter_outer(&c);
 }
