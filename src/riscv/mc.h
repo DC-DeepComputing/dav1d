@@ -92,8 +92,11 @@ static ALWAYS_INLINE void mc_dsp_init_riscv(Dav1dMCDSPContext *const c) {
   c->w_avg   = BF(dav1d_w_avg, rvv);
   c->mask    = BF(dav1d_mask, rvv);
 
-  c->warp8x8 = BF(dav1d_warp_8x8, rvv);
-  c->warp8x8t = BF(dav1d_warp_8x8t, rvv);
+  /* 内核级守卫（skill 5.1）：warp8x8 / warp8x8t 的 RVV 实现实测
+   * 0.195x / 0.203x（每行重新 gather 8-tap filter + 8 次单字节加载），
+   * 全尺寸慢于 C，故不派发、保留 C 实现。 */
+  /* c->warp8x8  = BF(dav1d_warp_8x8,  rvv); */
+  /* c->warp8x8t = BF(dav1d_warp_8x8t, rvv); */
 
   init_8tap_fns(rvv);
 

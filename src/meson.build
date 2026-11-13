@@ -293,6 +293,7 @@ if is_asm_enabled
                     'riscv/64/cdef.S',
                     'riscv/64/filmgrain.S',
                     'riscv/64/ipred.S',
+                    'riscv/64/lf_mask.S',
                     'riscv/64/itx.S',
                     'riscv/64/mc.S',
                 )

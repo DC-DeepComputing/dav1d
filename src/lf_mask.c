@@ -41,6 +41,8 @@
 #include "src/x86/lf_mask.h"
 #elif ARCH_AARCH64
 #include "src/arm/lf_mask.h"
+#elif ARCH_RISCV
+#include "src/riscv/lf_mask.h"
 #endif
 #endif
 
@@ -482,6 +484,8 @@ COLD void dav1d_lf_mask_dsp_init(Dav1dLfMaskDSPContext *const c)
     lf_mask_dsp_init_x86(c);
 #elif ARCH_AARCH64
     lf_mask_dsp_init_arm(c);
+#elif ARCH_RISCV
+    lf_mask_dsp_init_riscv(c);
 #endif
 #endif
 }
